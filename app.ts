@@ -14,11 +14,9 @@ function isAuthenticated(): boolean {
         const { timestamp } = JSON.parse(authData);
         const now = Date.now();
 
-        // Check if less than 24 hours have passed
         if (now - timestamp < AUTH_DURATION) {
             return true;
         } else {
-            // Auth expired, clear it
             localStorage.removeItem(AUTH_KEY);
             return false;
         }
@@ -72,6 +70,13 @@ function formatDateTime(date: Date): string {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function formatDateForInput(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function formatDisplayDateTime(date: Date): string {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -98,12 +103,11 @@ function checkPasscode(): void {
     const appScreen = document.getElementById('app') as HTMLDivElement;
 
     if (passcodeInput.value === PASSCODE) {
-        passcodeInput.blur(); // Remove focus from input to prevent scroll
-        setAuthenticated(); // Remember this device for 24 hours
+        passcodeInput.blur();
+        setAuthenticated();
         passcodeScreen.style.display = 'none';
         appScreen.style.display = 'block';
 
-        // Force scroll to top before initializing
         setTimeout(() => {
             window.scrollTo(0, 0);
             document.body.scrollTop = 0;
@@ -121,13 +125,26 @@ function checkPasscode(): void {
 function initializeUI(): void {
     setupEventListeners();
     setDefaultTimes();
+    setDefaultDateFilters();
     startLastBottleTimer();
     enforceNumericInputs();
     window.scrollTo(0, 0);
 }
 
+function setDefaultDateFilters(): void {
+    const today = new Date();
+    const startDateInput = document.getElementById('start-date-filter') as HTMLInputElement;
+    const endDateInput = document.getElementById('end-date-filter') as HTMLInputElement;
+
+    if (startDateInput) {
+        startDateInput.value = formatDateForInput(today);
+    }
+    if (endDateInput) {
+        endDateInput.value = formatDateForInput(today);
+    }
+}
+
 function enforceNumericInputs(): void {
-    // Get all amount input fields
     const amountInputs = [
         document.getElementById('bottle-amount') as HTMLInputElement,
         document.getElementById('pump-amount') as HTMLInputElement,
@@ -138,42 +155,34 @@ function enforceNumericInputs(): void {
     amountInputs.forEach(input => {
         if (!input) return;
 
-        // Prevent non-numeric characters from being typed
         input.addEventListener('keypress', (e: KeyboardEvent) => {
             const char = e.key;
             const currentValue = input.value;
 
-            // Allow: backspace, delete, tab, escape, enter
             if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.key === 'Escape' || e.key === 'Enter') {
                 return;
             }
 
-            // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
             if (e.ctrlKey || e.metaKey) {
                 return;
             }
 
-            // Allow numbers
             if (char >= '0' && char <= '9') {
                 return;
             }
 
-            // Allow decimal point only if there isn't one already
             if (char === '.' && currentValue.indexOf('.') === -1) {
                 return;
             }
 
-            // Prevent all other characters
             e.preventDefault();
         });
 
-        // Handle paste events to strip non-numeric characters
         input.addEventListener('paste', (e: ClipboardEvent) => {
             e.preventDefault();
             const pastedText = e.clipboardData?.getData('text') || '';
             const numericText = pastedText.replace(/[^0-9.]/g, '');
 
-            // Ensure only one decimal point
             const parts = numericText.split('.');
             const cleanText = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : numericText;
 
@@ -188,7 +197,6 @@ function validateTime(input: HTMLInputElement): boolean {
     const selectedTime = new Date(input.value);
     const now = new Date();
 
-    // Check if time is in the future
     if (selectedTime > now) {
         alert(`Cannot select future times. Please select a time in the past.`);
         input.value = formatDateTime(now);
@@ -202,18 +210,14 @@ function attachTimeValidation(inputId: string): void {
     const input = document.getElementById(inputId) as HTMLInputElement;
     if (!input) return;
 
-    // Check if this is a pump end time input
     if (inputId === 'pump-end-time' || inputId === 'edit-pump-end-time') {
-        // Pump end times can be in the future, no validation needed
         return;
     }
 
-    // Validate on blur (when user leaves the field)
     input.addEventListener('blur', () => {
         validateTime(input);
     });
 
-    // Validate on change
     input.addEventListener('change', () => {
         validateTime(input);
     });
@@ -250,13 +254,16 @@ function setupEventListeners(): void {
     saveEditBtn.addEventListener('click', saveEdit);
     cancelEditBtn.addEventListener('click', closeEditModal);
 
-    const dateFilter = document.getElementById('date-filter') as HTMLSelectElement;
+    const startDateFilter = document.getElementById('start-date-filter') as HTMLInputElement;
+    const endDateFilter = document.getElementById('end-date-filter') as HTMLInputElement;
     const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
+    const allTimeButton = document.getElementById('all-time-button') as HTMLButtonElement;
 
-    dateFilter.addEventListener('change', () => loadTimeline());
+    startDateFilter.addEventListener('change', () => loadTimeline());
+    endDateFilter.addEventListener('change', () => loadTimeline());
     typeFilter.addEventListener('change', () => loadTimeline());
+    allTimeButton.addEventListener('click', handleAllTimeClick);
 
-    // Attach time validation to all time inputs
     attachTimeValidation('bottle-time');
     attachTimeValidation('diaper-time');
     attachTimeValidation('pump-start-time');
@@ -480,16 +487,26 @@ function switchTab(tab: string): void {
     window.scrollTo(0, 0);
 }
 
+function handleAllTimeClick(): void {
+    const startDateInput = document.getElementById('start-date-filter') as HTMLInputElement;
+    const endDateInput = document.getElementById('end-date-filter') as HTMLInputElement;
+
+    startDateInput.value = '';
+    endDateInput.value = '';
+
+    loadTimeline();
+}
+
 async function loadTimeline(): Promise<void> {
     const timelineList = document.getElementById('timeline-list') as HTMLDivElement;
     const loadingDiv = document.getElementById('timeline-loading') as HTMLDivElement;
-    const dateFilter = (document.getElementById('date-filter') as HTMLSelectElement).value;
+    const startDateInput = (document.getElementById('start-date-filter') as HTMLInputElement).value;
+    const endDateInput = (document.getElementById('end-date-filter') as HTMLInputElement).value;
     const typeFilter = (document.getElementById('type-filter') as HTMLSelectElement).value;
 
     loadingDiv.style.display = 'block';
     timelineList.innerHTML = '';
 
-    // Remove existing summary if present
     const existingSummary = document.querySelector('.filter-summary');
     if (existingSummary) {
         existingSummary.remove();
@@ -498,34 +515,24 @@ async function loadTimeline(): Promise<void> {
     try {
         let q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
 
-        // Apply date filter
-        if (dateFilter !== 'all') {
-            const now = new Date();
-            let cutoffDate = new Date();
+        if (startDateInput && endDateInput) {
+            // Parse dates in local timezone to avoid UTC conversion issues
+            const [startYear, startMonth, startDay] = startDateInput.split('-').map(Number);
+            const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
 
-            if (dateFilter === 'week') {
-                // Last 7 days starting from 7 days ago at midnight
-                cutoffDate.setDate(now.getDate() - 7);
-                cutoffDate.setHours(0, 0, 0, 0);
-            } else {
-                // For 24, 48, 72, 96 - calculate days back from midnight
-                // Subtract 1 because "last 24" means today only (0 days back)
-                const hours = parseInt(dateFilter);
-                const daysBack = Math.floor(hours / 24) - 1;
-                cutoffDate.setDate(now.getDate() - daysBack);
-                cutoffDate.setHours(0, 0, 0, 0);
-            }
+            const [endYear, endMonth, endDay] = endDateInput.split('-').map(Number);
+            const endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
 
             q = query(
                 collection(db, 'entries'),
-                where('startTime', '>=', Timestamp.fromDate(cutoffDate)),
+                where('startTime', '>=', Timestamp.fromDate(startDate)),
+                where('startTime', '<=', Timestamp.fromDate(endDate)),
                 orderBy('startTime', 'desc')
             );
         }
 
         const snapshot = await getDocs(q);
 
-        // Calculate summary statistics
         const summaryStats = {
             bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
             diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
@@ -542,7 +549,6 @@ async function loadTimeline(): Promise<void> {
                 const data = docSnapshot.data();
                 const docId = docSnapshot.id;
 
-                // Apply type filter - this works in combination with date filter
                 if (typeFilter !== 'all') {
                     let entryType = '';
                     if (data.type === 'Feed' && data.subType === 'Breast Milk') {
@@ -556,11 +562,10 @@ async function loadTimeline(): Promise<void> {
                     }
 
                     if (entryType !== typeFilter) {
-                        return; // Skip this entry - doesn't match type filter
+                        return;
                     }
                 }
 
-                // Update summary stats for visible entries
                 if (data.type === 'Feed') {
                     const amount = convertToOz(data.amount, data.unit);
                     summaryStats.bottles.total += amount;
@@ -651,13 +656,11 @@ async function loadTimeline(): Promise<void> {
             if (!hasVisibleEntries) {
                 timelineList.innerHTML = '<p>No entries match the selected filters.</p>';
             } else {
-                // Create and insert summary
                 const summaryDiv = document.createElement('div');
                 summaryDiv.className = 'filter-summary';
 
                 let summaryHTML = '<div class="summary-header">Summary</div><div class="summary-stats">';
 
-                // Show Bottles section if filter is 'all', 'bottle-breast-milk', or 'bottle-formula'
                 if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula') {
                     summaryHTML += `
                         <div class="stat-group">
@@ -670,7 +673,6 @@ async function loadTimeline(): Promise<void> {
                     `;
                 }
 
-                // Show Diapers section if filter is 'all' or 'diaper'
                 if (typeFilter === 'all' || typeFilter === 'diaper') {
                     summaryHTML += `
                         <div class="stat-group">
@@ -683,7 +685,6 @@ async function loadTimeline(): Promise<void> {
                     `;
                 }
 
-                // Show Pumps section if filter is 'all' or 'pump'
                 if (typeFilter === 'all' || typeFilter === 'pump') {
                     summaryHTML += `
                         <div class="stat-group">
@@ -697,7 +698,6 @@ async function loadTimeline(): Promise<void> {
                 summaryHTML += '</div>';
                 summaryDiv.innerHTML = summaryHTML;
 
-                // Insert summary after filter section but before timeline list
                 const filterSection = document.querySelector('.filter-section');
                 if (filterSection && filterSection.parentNode) {
                     filterSection.parentNode.insertBefore(summaryDiv, timelineList);
@@ -727,7 +727,6 @@ async function loadWeeklyView(): Promise<void> {
     const currentWeekStartDate = getWeekStart(today);
     currentWeekStartDate.setHours(0, 0, 0, 0);
 
-    // Create a normalized copy of currentWeekStart for comparisons (don't mutate the global)
     const normalizedCurrentWeekStart = new Date(currentWeekStart);
     normalizedCurrentWeekStart.setHours(0, 0, 0, 0);
 
@@ -735,21 +734,18 @@ async function loadWeeklyView(): Promise<void> {
         currentWeekStart = new Date(birthWeekStart);
     }
 
-    // Disable/enable left arrow based on birth week
     if (normalizedCurrentWeekStart.getTime() <= birthWeekStart.getTime()) {
         prevWeekBtn.disabled = true;
     } else {
         prevWeekBtn.disabled = false;
     }
 
-    // Disable/enable right arrow based on current week
     if (normalizedCurrentWeekStart.getTime() >= currentWeekStartDate.getTime()) {
         nextWeekBtn.disabled = true;
     } else {
         nextWeekBtn.disabled = false;
     }
 
-    // Disable/enable Current Week button based on current week
     if (currentWeekBtn) {
         if (normalizedCurrentWeekStart.getTime() === currentWeekStartDate.getTime()) {
             currentWeekBtn.disabled = true;
@@ -810,7 +806,6 @@ async function loadWeeklyView(): Promise<void> {
                         dayStats[dateKey].bottles.formula += amount;
                     }
                 } else if (data.type === 'Breast Feed') {
-                    // Count breast feed sessions (from historical data)
                     dayStats[dateKey].bottles.sessions++;
                 } else if (data.type === 'Diaper') {
                     dayStats[dateKey].diapers.total++;
@@ -881,7 +876,6 @@ async function loadWeeklyView(): Promise<void> {
 
         weeklyStats.appendChild(weeklyContainer);
 
-        // Auto-scroll to center the current day
         if (currentDayIndex !== -1) {
             setTimeout(() => {
                 const currentDayElement = weeklyContainer.children[currentDayIndex] as HTMLElement;
@@ -1151,8 +1145,6 @@ async function startLastBottleTimer(): Promise<void> {
 async function updateLastBottleTime(): Promise<void> {
     console.log('Fetching last bottle time...');
     try {
-        // OPTIMIZED: Only fetch Feed entries, ordered by time, limit to 1
-        // This reduces reads from ~200 to just 1 per call
         const q = query(
             collection(db, 'entries'),
             where('type', '==', 'Feed'),
@@ -1222,7 +1214,6 @@ document.getElementById('passcode-input')?.addEventListener('keypress', (e) => {
     }
 });
 
-// Check if already authenticated on page load
 window.addEventListener('DOMContentLoaded', () => {
     if (isAuthenticated()) {
         const passcodeScreen = document.getElementById('passcode-screen') as HTMLDivElement;

@@ -23,7 +23,7 @@ button, select, input, textarea {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    min-height: 100dvh; /* Better mobile viewport height */
+    min-height: 100dvh;
     padding: 20px;
 }
 
@@ -178,7 +178,8 @@ label {
 select,
 input[type="number"],
 input[type="datetime-local"],
-input[type="text"] {
+input[type="text"],
+input[type="date"] {
     width: 100%;
     box-sizing: border-box;
     font-family: Arial, sans-serif;
@@ -307,7 +308,7 @@ button:active {
 .timeline-entry-notes {
     margin-top: 6px;
     padding: 6px;
-    background-color: #f9f9f9;
+    background-color: transparent;
     border-left: 3px solid #999;
     font-style: italic;
     font-size: 12px;
@@ -411,6 +412,117 @@ button:active {
     font-size: 12px;
 }
 
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    overflow: auto;
+}
+
+.modal-content {
+    background-color: white;
+    margin: 50px auto;
+    padding: 30px;
+    border: 2px solid #666;
+    max-width: 500px;
+    width: 90%;
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    flex: 1;
+}
+
+.filter-section {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.filter-section label {
+    margin-top: 0;
+    margin-bottom: 5px;
+}
+
+.filter-section select {
+    margin-bottom: 15px;
+}
+
+.filter-section select:last-of-type {
+    margin-bottom: 0;
+}
+
+.quick-filter-button {
+    width: 100%;
+    margin-top: 10px;
+    margin-bottom: 15px;
+    background-color: #4a90e2;
+    color: white;
+    border: 2px outset #4a90e2;
+}
+
+.quick-filter-button:hover {
+    background-color: #3a7bc8;
+}
+
+.quick-filter-button:active {
+    border: 2px inset #4a90e2;
+}
+
+.filter-summary {
+    background-color: #e6f3ff;
+    border: 2px solid #4a90e2;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.summary-header {
+    font-weight: bold;
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #4a90e2;
+}
+
+.summary-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+@media (min-width: 769px) {
+    .summary-stats {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .summary-stats .stat-group {
+        flex: 1;
+    }
+}
+
 @media (max-width: 768px) {
     .container {
         margin: 0;
@@ -466,8 +578,9 @@ button:active {
     select,
     input[type="number"],
     input[type="datetime-local"],
-    input[type="text"] {
-        font-size: 16px;
+    input[type="text"],
+    input[type="date"] {
+        font-size: 16px !important;
         padding: 12px;
         margin-bottom: 8px;
     }
@@ -482,6 +595,13 @@ button:active {
         padding: 14px 16px;
         font-size: 16px;
         margin-bottom: 12px;
+    }
+
+    .quick-filter-button {
+        margin-top: 8px;
+        margin-bottom: 12px;
+        padding: 12px;
+        font-size: 15px;
     }
 
     .timeline-entry {
@@ -617,101 +737,6 @@ button:active {
         font-size: 11px;
     }
 
-    /* Make tap targets bigger for better mobile UX */
-    .tab-button,
-    button,
-    select,
-    input {
-        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
-    }
-
-    /* Prevent zoom on input focus on iOS */
-    input[type="text"],
-    input[type="number"],
-    input[type="datetime-local"],
-    select,
-    textarea {
-        font-size: 16px !important;
-    }
-
-    /* Better spacing for unit selector on mobile */
-    #bottle-fields div[style*="display: flex"],
-    #pump-fields div[style*="display: flex"],
-    #edit-bottle-fields div[style*="display: flex"],
-    #edit-pump-fields div[style*="display: flex"] {
-        gap: 8px !important;
-    }
-
-    #bottle-unit,
-    #pump-unit,
-    #edit-bottle-unit,
-    #edit-pump-unit {
-        flex: 0 0 70px !important;
-        padding: 12px 8px !important;
-    }
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    overflow: auto;
-}
-
-.modal-content {
-    background-color: white;
-    margin: 50px auto;
-    padding: 30px;
-    border: 2px solid #666;
-    max-width: 500px;
-    width: 90%;
-}
-
-.modal-content h2 {
-    margin-top: 0;
-    color: #333;
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
-}
-
-.modal-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-}
-
-.modal-buttons button {
-    flex: 1;
-}
-
-.filter-section {
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    padding: 15px;
-    margin-bottom: 20px;
-    border-radius: 4px;
-}
-
-.filter-section label {
-    margin-top: 0;
-    margin-bottom: 5px;
-}
-
-.filter-section select {
-    margin-bottom: 15px;
-}
-
-.filter-section select:last-of-type {
-    margin-bottom: 0;
-}
-
-@media (max-width: 768px) {
     .filter-section {
         padding: 12px;
         margin-bottom: 15px;
@@ -724,43 +749,7 @@ button:active {
     .filter-section select {
         margin-bottom: 12px;
     }
-}
 
-.filter-summary {
-    background-color: #e6f3ff;
-    border: 2px solid #4a90e2;
-    padding: 15px;
-    margin-bottom: 20px;
-    border-radius: 4px;
-}
-
-.summary-header {
-    font-weight: bold;
-    font-size: 16px;
-    color: #333;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #4a90e2;
-}
-
-.summary-stats {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-@media (min-width: 769px) {
-    .summary-stats {
-        flex-direction: row;
-        justify-content: space-between;
-    }
-
-    .summary-stats .stat-group {
-        flex: 1;
-    }
-}
-
-@media (max-width: 768px) {
     .filter-summary {
         padding: 12px;
         margin-bottom: 15px;
@@ -774,5 +763,27 @@ button:active {
 
     .summary-stats {
         gap: 12px;
+    }
+
+    .tab-button,
+    button,
+    select,
+    input {
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    }
+
+    #bottle-fields div[style*="display: flex"],
+    #pump-fields div[style*="display: flex"],
+    #edit-bottle-fields div[style*="display: flex"],
+    #edit-pump-fields div[style*="display: flex"] {
+        gap: 8px !important;
+    }
+
+    #bottle-unit,
+    #pump-unit,
+    #edit-bottle-unit,
+    #edit-pump-unit {
+        flex: 0 0 70px !important;
+        padding: 12px 8px !important;
     }
 }
