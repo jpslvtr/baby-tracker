@@ -148,7 +148,8 @@ label {
 
 select,
 input[type="number"],
-input[type="datetime-local"] {
+input[type="datetime-local"],
+input[type="text"] {
     width: 100%;
     box-sizing: border-box;
     font-family: Arial, sans-serif;
@@ -216,31 +217,31 @@ button:active {
 
 .timeline-entry {
     border: 1px solid #ccc;
-    padding: 15px;
-    margin-bottom: 10px;
+    padding: 10px;
+    margin-bottom: 8px;
     background-color: white;
 }
 
 .timeline-entry-actions {
     display: flex;
     gap: 5px;
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .timeline-entry-actions button {
     width: auto;
-    padding: 5px 10px;
-    font-size: 12px;
+    padding: 4px 8px;
+    font-size: 11px;
     margin: 0;
 }
 
 .timeline-date-header {
     font-weight: bold;
-    font-size: 18px;
+    font-size: 16px;
     color: #333;
-    padding: 15px 0 10px 0;
-    margin-top: 20px;
-    margin-bottom: 10px;
+    padding: 10px 0 8px 0;
+    margin-top: 15px;
+    margin-bottom: 8px;
     border-bottom: 2px solid #666;
 }
 
@@ -252,7 +253,7 @@ button:active {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     flex-wrap: wrap;
     gap: 10px;
 }
@@ -260,25 +261,27 @@ button:active {
 .timeline-entry-type {
     font-weight: bold;
     color: #333;
-    font-size: 16px;
+    font-size: 14px;
 }
 
 .timeline-entry-time {
     color: #666;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .timeline-entry-details {
     color: #444;
-    line-height: 1.6;
+    line-height: 1.4;
+    font-size: 13px;
 }
 
 .timeline-entry-notes {
-    margin-top: 10px;
-    padding: 10px;
+    margin-top: 6px;
+    padding: 6px;
     background-color: #f9f9f9;
     border-left: 3px solid #999;
     font-style: italic;
+    font-size: 12px;
 }
 
 .week-navigation {

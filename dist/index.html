@@ -5,15 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Baby Tracker</title>
-  <script type="module" crossorigin src="/baby-tracker/assets/main-Y2voPaja.js"></script>
-  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-nmmOXccd.css">
+  <script type="module" crossorigin src="/baby-tracker/assets/main-D0SOtqVW.js"></script>
+  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-DSrfBeUH.css">
 </head>
 
 <body>
     <div id="passcode-screen" class="passcode-container">
         <div class="passcode-box">
             <h1>Baby Tracker</h1>
-            <input type="password" id="passcode-input" placeholder="Enter passcode">
+            <input type="text" id="passcode-input" placeholder="Enter passcode">
             <button id="passcode-submit">Enter</button>
             <div id="passcode-error"></div>
         </div>
@@ -50,8 +50,14 @@
                     <label>Start Time:</label>
                     <input type="datetime-local" id="bottle-time">
 
-                    <label>Amount (oz):</label>
-                    <input type="number" step="0.01" id="bottle-amount" placeholder="0.00">
+                    <label>Amount:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" step="0.01" id="bottle-amount" placeholder="0.00" style="flex: 1;">
+                        <select id="bottle-unit" style="flex: 0 0 80px;">
+                            <option value="oz">oz</option>
+                            <option value="ml">ml</option>
+                        </select>
+                    </div>
 
                     <label>Notes:</label>
                     <textarea id="bottle-notes" placeholder="Optional notes..."></textarea>
@@ -79,8 +85,14 @@
                     <label>End Time:</label>
                     <input type="datetime-local" id="pump-end-time">
 
-                    <label>Amount (oz):</label>
-                    <input type="number" step="0.01" id="pump-amount" placeholder="0.00">
+                    <label>Amount:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" step="0.01" id="pump-amount" placeholder="0.00" style="flex: 1;">
+                        <select id="pump-unit" style="flex: 0 0 80px;">
+                            <option value="oz">oz</option>
+                            <option value="ml">ml</option>
+                        </select>
+                    </div>
 
                     <label>Notes:</label>
                     <textarea id="pump-notes" placeholder="Optional notes..."></textarea>
@@ -105,10 +117,16 @@
 
                 <div id="edit-bottle-fields" style="display: none;">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="edit-bottle-time" step="300">
+                    <input type="datetime-local" id="edit-bottle-time">
 
-                    <label>Amount (oz):</label>
-                    <input type="number" step="0.01" id="edit-bottle-amount" placeholder="0.00">
+                    <label>Amount:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" step="0.01" id="edit-bottle-amount" placeholder="0.00" style="flex: 1;">
+                        <select id="edit-bottle-unit" style="flex: 0 0 80px;">
+                            <option value="oz">oz</option>
+                            <option value="ml">ml</option>
+                        </select>
+                    </div>
 
                     <label>Notes:</label>
                     <textarea id="edit-bottle-notes" placeholder="Optional notes..."></textarea>
@@ -116,7 +134,7 @@
 
                 <div id="edit-diaper-fields" style="display: none;">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="edit-diaper-time" step="300">
+                    <input type="datetime-local" id="edit-diaper-time">
 
                     <label>Type:</label>
                     <select id="edit-diaper-type">
@@ -131,13 +149,19 @@
 
                 <div id="edit-pump-fields" style="display: none;">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="edit-pump-start-time" step="300">
+                    <input type="datetime-local" id="edit-pump-start-time">
 
                     <label>End Time:</label>
-                    <input type="datetime-local" id="edit-pump-end-time" step="300">
+                    <input type="datetime-local" id="edit-pump-end-time">
 
-                    <label>Amount (oz):</label>
-                    <input type="number" step="0.01" id="edit-pump-amount" placeholder="0.00">
+                    <label>Amount:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" step="0.01" id="edit-pump-amount" placeholder="0.00" style="flex: 1;">
+                        <select id="edit-pump-unit" style="flex: 0 0 80px;">
+                            <option value="oz">oz</option>
+                            <option value="ml">ml</option>
+                        </select>
+                    </div>
 
                     <label>Notes:</label>
                     <textarea id="edit-pump-notes" placeholder="Optional notes..."></textarea>
