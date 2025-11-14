@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { PASSCODE } from "./secrets";
 
 const firebaseConfig = {
     apiKey: "AIzaSyA66X3tR-oquob5ZbBrrHv_EAmhwEHTi48",
@@ -13,6 +12,8 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+
+const PASSCODE = "1234";
 
 interface Entry {
     type: string;
@@ -27,6 +28,7 @@ interface Entry {
 
 let currentWeekStart: Date = getWeekStart(new Date());
 let currentEditingEntryId: string | null = null;
+let lastBottleTimerInterval: number | null = null;
 
 function getWeekStart(date: Date): Date {
     const d = new Date(date);
@@ -90,6 +92,7 @@ function checkPasscode(): void {
 function initializeUI(): void {
     setupEventListeners();
     setDefaultTimes();
+    startLastBottleTimer();
 }
 
 function setupEventListeners(): void {
@@ -251,6 +254,10 @@ async function handleSubmitEntry(): Promise<void> {
             statusDiv.style.display = 'block';
 
             clearForm();
+
+            if (entry.type === 'Feed') {
+                updateLastBottleTime();
+            }
 
             setTimeout(() => {
                 statusDiv.style.display = 'none';
@@ -700,8 +707,70 @@ async function deleteEntry(docId: string): Promise<void> {
     try {
         await deleteDoc(doc(db, 'entries', docId));
         loadTimeline();
+        updateLastBottleTime();
     } catch (error) {
         alert('Failed to delete entry');
+    }
+}
+
+async function startLastBottleTimer(): Promise<void> {
+    await updateLastBottleTime();
+
+    if (lastBottleTimerInterval) {
+        clearInterval(lastBottleTimerInterval);
+    }
+
+    lastBottleTimerInterval = window.setInterval(updateLastBottleDisplay, 1000);
+}
+
+async function updateLastBottleTime(): Promise<void> {
+    try {
+        const q = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Feed'),
+            orderBy('startTime', 'desc')
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+            const lastBottle = snapshot.docs[0].data();
+            const lastBottleTime = lastBottle.startTime.toDate();
+            localStorage.setItem('lastBottleTime', lastBottleTime.toISOString());
+        } else {
+            localStorage.removeItem('lastBottleTime');
+        }
+
+        updateLastBottleDisplay();
+    } catch (error) {
+        console.error('Error fetching last bottle time:', error);
+    }
+}
+
+function updateLastBottleDisplay(): void {
+    const displayElement = document.querySelector('.last-bottle-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
+
+    if (!lastBottleTimeStr) {
+        displayElement.textContent = 'No bottles recorded';
+        return;
+    }
+
+    const lastBottleTime = new Date(lastBottleTimeStr);
+    const now = new Date();
+    const diffMs = now.getTime() - lastBottleTime.getTime();
+
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+    if (hours > 0) {
+        displayElement.textContent = `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        displayElement.textContent = `${minutes}m ${seconds}s`;
+    } else {
+        displayElement.textContent = `${seconds}s`;
     }
 }
 
