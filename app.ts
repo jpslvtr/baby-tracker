@@ -626,22 +626,22 @@ async function loadWeeklyView(): Promise<void> {
                 <div class="day-stats-header">${dayName}<br>${dateStr}</div>
                 <div class="stat-group">
                     <div class="stat-group-title">Bottles</div>
-                    <div class="stat-line-small">Number of feeds: ${stats.bottles.sessions}</div>
-                    <div class="stat-line-small">Breast Milk: ${formatBothUnits(stats.bottles.breastMilk, 'oz')}</div>
-                    <div class="stat-line-small">Formula: ${formatBothUnits(stats.bottles.formula, 'oz')}</div>
+                    <div class="stat-line">Number of feeds: ${stats.bottles.sessions}</div>
+                    <div class="stat-line">Breast Milk: ${formatBothUnits(stats.bottles.breastMilk, 'oz')}</div>
+                    <div class="stat-line">Formula: ${formatBothUnits(stats.bottles.formula, 'oz')}</div>
                     <div class="stat-line">Total volume: ${formatBothUnits(stats.bottles.total, 'oz')}</div>
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Diapers</div>
-                    <div class="stat-line-small">Pee: ${stats.diapers.pee}</div>
-                    <div class="stat-line-small">Poo: ${stats.diapers.poo}</div>
-                    <div class="stat-line-small">Mixed: ${stats.diapers.mixed}</div>
+                    <div class="stat-line">Pee: ${stats.diapers.pee}</div>
+                    <div class="stat-line">Poo: ${stats.diapers.poo}</div>
+                    <div class="stat-line">Mixed: ${stats.diapers.mixed}</div>
                     <div class="stat-line">Total diapers: ${stats.diapers.total}</div>
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Pumps</div>
                     <div class="stat-line">Total volume: ${formatBothUnits(stats.pumps.total, 'oz')}</div>
-                    <div class="stat-line-small">Number of sessions: ${stats.pumps.sessions}</div>
+                    <div class="stat-line">Number of sessions: ${stats.pumps.sessions}</div>
                 </div>
             `;
 
