@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baby Tracker</title>
+  <script type="module" crossorigin src="/assets/main-wCbOLoV-.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-nmmOXccd.css">
+</head>
+
+<body>
+    <div id="passcode-screen" class="passcode-container">
+        <div class="passcode-box">
+            <h1>Baby Tracker</h1>
+            <input type="password" id="passcode-input" placeholder="Enter passcode">
+            <button id="passcode-submit">Enter</button>
+            <div id="passcode-error"></div>
+        </div>
+    </div>
+
+    <div id="app" class="container" style="display: none;">
+        <h1>Baby Tracker</h1>
+
+        <div class="tab-buttons">
+            <button id="entry-tab" class="tab-button active">Add Entry</button>
+            <button id="timeline-tab" class="tab-button">Entries</button>
+            <button id="weekly-tab" class="tab-button">Weekly View</button>
+        </div>
+
+        <div id="entry-view" class="view active">
+            <div class="panel">
+                <h2>Add Entry</h2>
+
+                <label>Entry Type:</label>
+                <select id="entry-type">
+                    <option value="">Select type...</option>
+                    <option value="bottle-breast-milk">Bottle - Breast Milk</option>
+                    <option value="bottle-formula">Bottle - Formula</option>
+                    <option value="diaper">Diaper</option>
+                    <option value="pump">Pump</option>
+                </select>
+
+                <div id="bottle-fields" class="entry-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="bottle-time">
+
+                    <label>Amount (oz):</label>
+                    <input type="number" step="0.01" id="bottle-amount" placeholder="0.00">
+
+                    <label>Notes:</label>
+                    <textarea id="bottle-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div id="diaper-fields" class="entry-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="diaper-time">
+
+                    <label>Type:</label>
+                    <select id="diaper-type">
+                        <option value="Pee">Pee</option>
+                        <option value="Poo">Poo</option>
+                        <option value="Mixed">Mixed</option>
+                    </select>
+
+                    <label>Notes:</label>
+                    <textarea id="diaper-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div id="pump-fields" class="entry-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="pump-start-time">
+
+                    <label>End Time:</label>
+                    <input type="datetime-local" id="pump-end-time">
+
+                    <label>Amount (oz):</label>
+                    <input type="number" step="0.01" id="pump-amount" placeholder="0.00">
+
+                    <label>Notes:</label>
+                    <textarea id="pump-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <button id="submit-entry" style="display: none;">Add Entry</button>
+                <div id="submit-status"></div>
+            </div>
+        </div>
+
+        <div id="timeline-view" class="view" style="display: none;">
+            <div class="panel">
+                <h2>Entries</h2>
+                <div id="timeline-loading">Loading...</div>
+                <div id="timeline-list"></div>
+            </div>
+        </div>
+
+        <div id="edit-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>Edit Entry</h2>
+
+                <div id="edit-bottle-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="edit-bottle-time">
+
+                    <label>Amount (oz):</label>
+                    <input type="number" step="0.01" id="edit-bottle-amount" placeholder="0.00">
+
+                    <label>Notes:</label>
+                    <textarea id="edit-bottle-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div id="edit-diaper-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="edit-diaper-time">
+
+                    <label>Type:</label>
+                    <select id="edit-diaper-type">
+                        <option value="Pee">Pee</option>
+                        <option value="Poo">Poo</option>
+                        <option value="Mixed">Mixed</option>
+                    </select>
+
+                    <label>Notes:</label>
+                    <textarea id="edit-diaper-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div id="edit-pump-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="edit-pump-start-time">
+
+                    <label>End Time:</label>
+                    <input type="datetime-local" id="edit-pump-end-time">
+
+                    <label>Amount (oz):</label>
+                    <input type="number" step="0.01" id="edit-pump-amount" placeholder="0.00">
+
+                    <label>Notes:</label>
+                    <textarea id="edit-pump-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div class="modal-buttons">
+                    <button id="save-edit">Save</button>
+                    <button id="cancel-edit">Cancel</button>
+                </div>
+                <div id="edit-status"></div>
+            </div>
+        </div>
+
+        <div id="weekly-view" class="view" style="display: none;">
+            <div class="panel">
+                <h2>Weekly View</h2>
+                <div class="week-navigation">
+                    <button id="prev-week">&lt;</button>
+                    <span id="week-range"></span>
+                    <button id="next-week">&gt;</button>
+                </div>
+                <button id="current-week" class="current-week-button">Current Week</button>
+                <div id="weekly-loading">Loading...</div>
+                <div id="weekly-stats"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            © 2025 James Park
+        </div>
+    </div>
+
+</body>
+
+</html>

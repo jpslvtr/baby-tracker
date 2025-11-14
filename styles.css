@@ -116,6 +116,28 @@ h1 {
     margin-bottom: 20px;
 }
 
+.last-bottle-display {
+    background-color: #e6f3ff;
+    border: 2px solid #4a90e2;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.last-bottle-label {
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.last-bottle-value {
+    font-size: 24px;
+    color: #4a90e2;
+    font-weight: bold;
+    font-family: monospace;
+}
+
 label {
     font-weight: bold;
     display: block;
@@ -297,6 +319,15 @@ button:active {
     background-color: white;
     min-width: 150px;
     flex-shrink: 0;
+}
+
+.day-stats.current-day {
+    border: 3px solid #4a90e2;
+    background-color: #e6f3ff;
+}
+
+.day-stats.current-day .day-stats-header {
+    color: #4a90e2;
 }
 
 .day-stats-header {
