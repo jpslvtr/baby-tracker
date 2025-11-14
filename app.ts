@@ -156,6 +156,12 @@ function attachTimeValidation(inputId: string): void {
     const input = document.getElementById(inputId) as HTMLInputElement;
     if (!input) return;
 
+    // Check if this is a pump end time input
+    if (inputId === 'pump-end-time' || inputId === 'edit-pump-end-time') {
+        // Pump end times can be in the future, no validation needed
+        return;
+    }
+
     // Validate on blur (when user leaves the field)
     input.addEventListener('blur', () => {
         validateTime(input);
