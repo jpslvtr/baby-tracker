@@ -1,21 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { PASSCODE } from './secrets';
+import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './secrets';
+import { FIREBASECONFIG } from './firebase-config'
 
-const firebaseConfig = {
-    apiKey: "AIzaSyA66X3tR-oquob5ZbBrrHv_EAmhwEHTi48",
-    authDomain: "baby-tracker-b0936.firebaseapp.com",
-    projectId: "baby-tracker-b0936",
-    storageBucket: "baby-tracker-b0936.firebasestorage.app",
-    messagingSenderId: "931756532206",
-    appId: "1:931756532206:web:bf90d10dc3e3837383eeff"
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
+const firebaseApp = initializeApp(FIREBASECONFIG);
 const db = getFirestore(firebaseApp);
-
-const AUTH_KEY = "baby-tracker-auth";
-const AUTH_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 function isAuthenticated(): boolean {
     const authData = localStorage.getItem(AUTH_KEY);
