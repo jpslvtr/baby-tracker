@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { PASSCODE } from './secrets';
 
 const firebaseConfig = {
     apiKey: "AIzaSyA66X3tR-oquob5ZbBrrHv_EAmhwEHTi48",
@@ -13,7 +14,36 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
-const PASSCODE = "1234";
+const AUTH_KEY = "baby-tracker-auth";
+const AUTH_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+function isAuthenticated(): boolean {
+    const authData = localStorage.getItem(AUTH_KEY);
+    if (!authData) return false;
+
+    try {
+        const { timestamp } = JSON.parse(authData);
+        const now = Date.now();
+
+        // Check if less than 24 hours have passed
+        if (now - timestamp < AUTH_DURATION) {
+            return true;
+        } else {
+            // Auth expired, clear it
+            localStorage.removeItem(AUTH_KEY);
+            return false;
+        }
+    } catch {
+        return false;
+    }
+}
+
+function setAuthenticated(): void {
+    const authData = {
+        timestamp: Date.now()
+    };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(authData));
+}
 
 interface Entry {
     type: string;
@@ -80,6 +110,7 @@ function checkPasscode(): void {
 
     if (passcodeInput.value === PASSCODE) {
         passcodeInput.blur(); // Remove focus from input to prevent scroll
+        setAuthenticated(); // Remember this device for 24 hours
         passcodeScreen.style.display = 'none';
         appScreen.style.display = 'block';
 
@@ -932,5 +963,24 @@ document.getElementById('passcode-submit')?.addEventListener('click', checkPassc
 document.getElementById('passcode-input')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         checkPasscode();
+    }
+});
+
+// Check if already authenticated on page load
+window.addEventListener('DOMContentLoaded', () => {
+    if (isAuthenticated()) {
+        const passcodeScreen = document.getElementById('passcode-screen') as HTMLDivElement;
+        const appScreen = document.getElementById('app') as HTMLDivElement;
+
+        passcodeScreen.style.display = 'none';
+        appScreen.style.display = 'block';
+
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        }, 0);
+
+        initializeUI();
     }
 });
