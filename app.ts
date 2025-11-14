@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { PASSCODE } from './secrets';
 
 const firebaseConfig = {
     apiKey: "AIzaSyA66X3tR-oquob5ZbBrrHv_EAmhwEHTi48",
@@ -13,6 +12,8 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+
+const PASSCODE = "1234";
 
 interface Entry {
     type: string;
@@ -78,8 +79,17 @@ function checkPasscode(): void {
     const appScreen = document.getElementById('app') as HTMLDivElement;
 
     if (passcodeInput.value === PASSCODE) {
+        passcodeInput.blur(); // Remove focus from input to prevent scroll
         passcodeScreen.style.display = 'none';
         appScreen.style.display = 'block';
+
+        // Force scroll to top before initializing
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        }, 0);
+
         initializeUI();
     } else {
         passcodeError.textContent = 'Incorrect passcode';
@@ -92,6 +102,7 @@ function initializeUI(): void {
     setupEventListeners();
     setDefaultTimes();
     startLastBottleTimer();
+    window.scrollTo(0, 0);
 }
 
 function validateTime(input: HTMLInputElement): boolean {
@@ -299,8 +310,8 @@ async function handleSubmitEntry(): Promise<void> {
             if (selectedStartTime > now) {
                 throw new Error('Cannot add entries in the future');
             }
-            if (selectedEndTime > now) {
-                throw new Error('Cannot add entries in the future');
+            if (selectedEndTime < selectedStartTime) {
+                throw new Error('End time must be after start time');
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
@@ -376,6 +387,8 @@ function switchTab(tab: string): void {
         (document.getElementById('weekly-view') as HTMLElement).style.display = 'block';
         loadWeeklyView();
     }
+
+    window.scrollTo(0, 0);
 }
 
 async function loadTimeline(): Promise<void> {
@@ -576,22 +589,22 @@ async function loadWeeklyView(): Promise<void> {
                 <div class="day-stats-header">${dayName}<br>${dateStr}</div>
                 <div class="stat-group">
                     <div class="stat-group-title">Bottles</div>
-                    <div class="stat-line">Number of feeds: ${stats.bottles.sessions}</div>
-                    <div class="stat-line">Breast Milk: ${formatBothUnits(stats.bottles.breastMilk, 'oz')}</div>
-                    <div class="stat-line">Formula: ${formatBothUnits(stats.bottles.formula, 'oz')}</div>
+                    <div class="stat-line-small">Number of feeds: ${stats.bottles.sessions}</div>
+                    <div class="stat-line-small">Breast Milk: ${formatBothUnits(stats.bottles.breastMilk, 'oz')}</div>
+                    <div class="stat-line-small">Formula: ${formatBothUnits(stats.bottles.formula, 'oz')}</div>
                     <div class="stat-line">Total volume: ${formatBothUnits(stats.bottles.total, 'oz')}</div>
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Diapers</div>
-                    <div class="stat-line">Pee: ${stats.diapers.pee}</div>
-                    <div class="stat-line">Poo: ${stats.diapers.poo}</div>
-                    <div class="stat-line">Mixed: ${stats.diapers.mixed}</div>
+                    <div class="stat-line-small">Pee: ${stats.diapers.pee}</div>
+                    <div class="stat-line-small">Poo: ${stats.diapers.poo}</div>
+                    <div class="stat-line-small">Mixed: ${stats.diapers.mixed}</div>
                     <div class="stat-line">Total diapers: ${stats.diapers.total}</div>
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Pumps</div>
                     <div class="stat-line">Total volume: ${formatBothUnits(stats.pumps.total, 'oz')}</div>
-                    <div class="stat-line">Number of sessions: ${stats.pumps.sessions}</div>
+                    <div class="stat-line-small">Number of sessions: ${stats.pumps.sessions}</div>
                 </div>
             `;
 
@@ -788,8 +801,8 @@ async function saveEdit(): Promise<void> {
             if (selectedStartTime > now) {
                 throw new Error('Cannot set time in the future');
             }
-            if (selectedEndTime > now) {
-                throw new Error('Cannot set time in the future');
+            if (selectedEndTime < selectedStartTime) {
+                throw new Error('End time must be after start time');
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
