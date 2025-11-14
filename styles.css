@@ -3,6 +3,19 @@ body {
     margin: 0;
     padding: 0;
     background-color: #f0f0f0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button, select, input, textarea {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 
 .passcode-container {
@@ -25,16 +38,30 @@ body {
     text-align: center;
     color: #333;
     margin-bottom: 20px;
+    font-size: 24px;
 }
 
 #passcode-input {
     width: 100%;
     box-sizing: border-box;
     font-family: monospace;
-    font-size: 16px;
+    font-size: 18px;
     border: 1px solid #999;
-    padding: 10px;
+    padding: 14px;
     margin-bottom: 15px;
+}
+
+#passcode-submit {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    background-color: #ddd;
+    border: 2px outset #ddd;
+    cursor: pointer;
+}
+
+#passcode-submit:active {
+    border: 2px inset #ddd;
 }
 
 #passcode-error {
@@ -45,6 +72,7 @@ body {
     margin-top: 10px;
     border-radius: 4px;
     display: none;
+    font-size: 14px;
 }
 
 .container {
@@ -314,6 +342,8 @@ button:active {
     gap: 15px;
     overflow-x: auto;
     padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
 }
 
 .day-stats {
@@ -322,6 +352,7 @@ button:active {
     background-color: white;
     min-width: 150px;
     flex-shrink: 0;
+    scroll-snap-align: start;
 }
 
 .day-stats.current-day {
@@ -382,21 +413,240 @@ button:active {
 @media (max-width: 768px) {
     .container {
         margin: 0;
-        padding: 15px;
+        padding: 10px;
         border: none;
     }
 
+    h1 {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+
+    .panel {
+        padding: 12px;
+    }
+
+    .panel h2 {
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+
     .tab-buttons {
-        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px;
     }
 
     .tab-button {
         width: 100%;
+        padding: 12px 10px;
+        font-size: 15px;
+        min-width: unset;
+    }
+
+    .last-bottle-display {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .last-bottle-label {
+        font-size: 13px;
+    }
+
+    .last-bottle-value {
+        font-size: 22px;
+    }
+
+    label {
+        margin-top: 12px;
+        margin-bottom: 4px;
+        font-size: 15px;
+    }
+
+    select,
+    input[type="number"],
+    input[type="datetime-local"],
+    input[type="text"] {
+        font-size: 16px;
+        padding: 12px;
+        margin-bottom: 8px;
+    }
+
+    textarea {
+        font-size: 15px;
+        padding: 10px;
+        min-height: 70px;
+    }
+
+    button {
+        padding: 14px 16px;
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+
+    .timeline-entry {
+        padding: 8px;
+        margin-bottom: 6px;
     }
 
     .timeline-entry-header {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+
+    .timeline-entry-type {
+        font-size: 14px;
+    }
+
+    .timeline-entry-time {
+        font-size: 12px;
+    }
+
+    .timeline-entry-details {
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .timeline-entry-notes {
+        margin-top: 5px;
+        padding: 6px;
+        font-size: 12px;
+    }
+
+    .timeline-entry-actions {
+        margin-top: 6px;
+        gap: 6px;
+    }
+
+    .timeline-entry-actions button {
+        padding: 6px 10px;
+        font-size: 13px;
+        flex: 1;
+    }
+
+    .timeline-date-header {
+        font-size: 15px;
+        padding: 8px 0 6px 0;
+        margin-top: 12px;
+        margin-bottom: 6px;
+    }
+
+    .week-navigation {
+        margin-bottom: 12px;
+        gap: 8px;
+    }
+
+    .week-navigation button {
+        padding: 10px 12px;
+        min-width: 45px;
+        font-size: 16px;
+    }
+
+    #week-range {
+        font-size: 14px;
+    }
+
+    .current-week-button {
+        margin-bottom: 12px;
+        padding: 12px;
+        font-size: 15px;
+    }
+
+    .weekly-scroll-container {
+        gap: 10px;
+        padding-bottom: 8px;
+    }
+
+    .day-stats {
+        padding: 10px;
+        min-width: 140px;
+    }
+
+    .day-stats-header {
+        font-size: 15px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+    }
+
+    .stat-group {
+        margin-bottom: 10px;
+    }
+
+    .stat-group-title {
+        font-size: 13px;
+        margin-bottom: 4px;
+    }
+
+    .stat-line {
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    .stat-line-small {
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+    .modal-content {
+        margin: 20px auto;
+        padding: 20px;
+        width: 95%;
+        max-width: 95%;
+    }
+
+    .modal-content h2 {
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+
+    .modal-buttons {
+        gap: 8px;
+        margin-top: 15px;
+    }
+
+    .modal-buttons button {
+        padding: 12px;
+        font-size: 15px;
+    }
+
+    .footer {
+        margin-top: 20px;
+        padding-top: 15px;
+        font-size: 11px;
+    }
+
+    /* Make tap targets bigger for better mobile UX */
+    .tab-button,
+    button,
+    select,
+    input {
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    }
+
+    /* Prevent zoom on input focus on iOS */
+    input[type="text"],
+    input[type="number"],
+    input[type="datetime-local"],
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+
+    /* Better spacing for unit selector on mobile */
+    #bottle-fields div[style*="display: flex"],
+    #pump-fields div[style*="display: flex"],
+    #edit-bottle-fields div[style*="display: flex"],
+    #edit-pump-fields div[style*="display: flex"] {
+        gap: 8px !important;
+    }
+
+    #bottle-unit,
+    #pump-unit,
+    #edit-bottle-unit,
+    #edit-pump-unit {
+        flex: 0 0 70px !important;
+        padding: 12px 8px !important;
     }
 }
 
