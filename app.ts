@@ -127,9 +127,21 @@ function setupEventListeners(): void {
     cancelEditBtn.addEventListener('click', closeEditModal);
 }
 
+function roundToNearest5Minutes(date: Date): Date {
+    const rounded = new Date(date);
+    const minutes = rounded.getMinutes();
+    const roundedMinutes = Math.round(minutes / 5) * 5;
+    rounded.setMinutes(roundedMinutes);
+    rounded.setSeconds(0);
+    rounded.setMilliseconds(0);
+    return rounded;
+}
+
 function setDefaultTimes(): void {
     const now = new Date();
-    const formatted = formatDateTime(now);
+    const rounded = roundToNearest5Minutes(now);
+    const formatted = formatDateTime(rounded);
+    const maxFormatted = formatDateTime(now);
 
     const bottleTime = document.getElementById('bottle-time') as HTMLInputElement | null;
     const diaperTime = document.getElementById('diaper-time') as HTMLInputElement | null;
@@ -138,19 +150,23 @@ function setDefaultTimes(): void {
 
     if (bottleTime) {
         bottleTime.value = formatted;
-        bottleTime.max = formatted;
+        bottleTime.max = maxFormatted;
+        bottleTime.step = "300";
     }
     if (diaperTime) {
         diaperTime.value = formatted;
-        diaperTime.max = formatted;
+        diaperTime.max = maxFormatted;
+        diaperTime.step = "300";
     }
     if (pumpStartTime) {
         pumpStartTime.value = formatted;
-        pumpStartTime.max = formatted;
+        pumpStartTime.max = maxFormatted;
+        pumpStartTime.step = "300";
     }
     if (pumpEndTime) {
         pumpEndTime.value = formatted;
-        pumpEndTime.max = formatted;
+        pumpEndTime.max = maxFormatted;
+        pumpEndTime.step = "300";
     }
 }
 
@@ -189,7 +205,6 @@ async function handleSubmitEntry(): Promise<void> {
 
     try {
         let entry: Entry | null = null;
-        const now = new Date();
 
         if (entryType === 'bottle-breast-milk' || entryType === 'bottle-formula') {
             const time = (document.getElementById('bottle-time') as HTMLInputElement).value;
@@ -199,10 +214,6 @@ async function handleSubmitEntry(): Promise<void> {
             if (!time) {
                 throw new Error('Start time is required');
             }
-            const selectedTime = new Date(time);
-            if (selectedTime > now) {
-                throw new Error('Start time cannot be in the future');
-            }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
             }
@@ -210,7 +221,7 @@ async function handleSubmitEntry(): Promise<void> {
             entry = {
                 type: 'Feed',
                 subType: entryType === 'bottle-breast-milk' ? 'Breast Milk' : 'Formula',
-                startTime: selectedTime,
+                startTime: new Date(time),
                 amount: amount,
                 unit: 'oz',
                 notes: notes
@@ -223,10 +234,6 @@ async function handleSubmitEntry(): Promise<void> {
             if (!time) {
                 throw new Error('Start time is required');
             }
-            const selectedTime = new Date(time);
-            if (selectedTime > now) {
-                throw new Error('Start time cannot be in the future');
-            }
             if (!diaperType) {
                 throw new Error('Diaper type is required');
             }
@@ -234,7 +241,7 @@ async function handleSubmitEntry(): Promise<void> {
             entry = {
                 type: 'Diaper',
                 diaperType: diaperType,
-                startTime: selectedTime,
+                startTime: new Date(time),
                 notes: notes
             };
         } else if (entryType === 'pump') {
@@ -249,22 +256,14 @@ async function handleSubmitEntry(): Promise<void> {
             if (!endTime) {
                 throw new Error('End time is required');
             }
-            const selectedStartTime = new Date(startTime);
-            const selectedEndTime = new Date(endTime);
-            if (selectedStartTime > now) {
-                throw new Error('Start time cannot be in the future');
-            }
-            if (selectedEndTime > now) {
-                throw new Error('End time cannot be in the future');
-            }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
             }
 
             entry = {
                 type: 'Pump',
-                startTime: selectedStartTime,
-                endTime: selectedEndTime,
+                startTime: new Date(startTime),
+                endTime: new Date(endTime),
                 amount: amount,
                 unit: 'oz',
                 notes: notes
@@ -752,16 +751,22 @@ async function deleteEntry(docId: string): Promise<void> {
 }
 
 async function startLastBottleTimer(): Promise<void> {
+    console.log('Starting last bottle timer...');
     await updateLastBottleTime();
 
     if (lastBottleTimerInterval) {
         clearInterval(lastBottleTimerInterval);
     }
 
-    lastBottleTimerInterval = window.setInterval(updateLastBottleDisplay, 1000);
+    lastBottleTimerInterval = window.setInterval(() => {
+        updateLastBottleDisplay();
+    }, 1000);
+
+    console.log('Timer started, interval ID:', lastBottleTimerInterval);
 }
 
 async function updateLastBottleTime(): Promise<void> {
+    console.log('Fetching last bottle time...');
     try {
         const q = query(
             collection(db, 'entries'),
@@ -769,14 +774,18 @@ async function updateLastBottleTime(): Promise<void> {
         );
         const snapshot = await getDocs(q);
 
+        console.log('Total entries found:', snapshot.docs.length);
+
         const lastBottle = snapshot.docs.find(doc => doc.data().type === 'Feed');
 
         if (lastBottle) {
             const lastBottleData = lastBottle.data();
             const lastBottleTime = lastBottleData.startTime.toDate();
             localStorage.setItem('lastBottleTime', lastBottleTime.toISOString());
+            console.log('Last bottle time set:', lastBottleTime);
         } else {
             localStorage.removeItem('lastBottleTime');
+            console.log('No bottle entries found');
         }
 
         updateLastBottleDisplay();
@@ -791,9 +800,13 @@ async function updateLastBottleTime(): Promise<void> {
 
 function updateLastBottleDisplay(): void {
     const displayElement = document.querySelector('.last-bottle-value') as HTMLElement;
-    if (!displayElement) return;
+    if (!displayElement) {
+        console.log('Display element not found');
+        return;
+    }
 
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
+    console.log('Updating display, last bottle time from storage:', lastBottleTimeStr);
 
     if (!lastBottleTimeStr) {
         displayElement.textContent = 'No bottles recorded';

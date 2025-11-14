@@ -31,6 +31,11 @@
             <div class="panel">
                 <h2>Add Entry</h2>
 
+                <div id="last-bottle-time" class="last-bottle-display">
+                    <div class="last-bottle-label">Time since last bottle:</div>
+                    <div class="last-bottle-value">Loading...</div>
+                </div>
+
                 <label>Entry Type:</label>
                 <select id="entry-type">
                     <option value="">Select type...</option>
@@ -99,7 +104,7 @@
 
                 <div id="edit-bottle-fields" style="display: none;">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="edit-bottle-time">
+                    <input type="datetime-local" id="edit-bottle-time" step="300">
 
                     <label>Amount (oz):</label>
                     <input type="number" step="0.01" id="edit-bottle-amount" placeholder="0.00">
@@ -110,7 +115,7 @@
 
                 <div id="edit-diaper-fields" style="display: none;">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="edit-diaper-time">
+                    <input type="datetime-local" id="edit-diaper-time" step="300">
 
                     <label>Type:</label>
                     <select id="edit-diaper-type">
@@ -125,10 +130,10 @@
 
                 <div id="edit-pump-fields" style="display: none;">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="edit-pump-start-time">
+                    <input type="datetime-local" id="edit-pump-start-time" step="300">
 
                     <label>End Time:</label>
-                    <input type="datetime-local" id="edit-pump-end-time">
+                    <input type="datetime-local" id="edit-pump-end-time" step="300">
 
                     <label>Amount (oz):</label>
                     <input type="number" step="0.01" id="edit-pump-amount" placeholder="0.00">
