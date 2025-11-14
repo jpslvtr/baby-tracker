@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit } from 'firebase/firestore';
 import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './config/secrets';
 import { FIREBASECONFIG } from './config/firebase-config'
 
@@ -489,6 +489,12 @@ async function loadTimeline(): Promise<void> {
     loadingDiv.style.display = 'block';
     timelineList.innerHTML = '';
 
+    // Remove existing summary if present
+    const existingSummary = document.querySelector('.filter-summary');
+    if (existingSummary) {
+        existingSummary.remove();
+    }
+
     try {
         let q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
 
@@ -519,6 +525,13 @@ async function loadTimeline(): Promise<void> {
 
         const snapshot = await getDocs(q);
 
+        // Calculate summary statistics
+        const summaryStats = {
+            bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
+            diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
+            pumps: { total: 0, sessions: 0 }
+        };
+
         if (snapshot.empty) {
             timelineList.innerHTML = '<p>No entries found.</p>';
         } else {
@@ -547,6 +560,31 @@ async function loadTimeline(): Promise<void> {
                     }
                 }
 
+                // Update summary stats for visible entries
+                if (data.type === 'Feed') {
+                    const amount = convertToOz(data.amount, data.unit);
+                    summaryStats.bottles.total += amount;
+                    summaryStats.bottles.sessions++;
+                    if (data.subType === 'Breast Milk') {
+                        summaryStats.bottles.breastMilk += amount;
+                    } else if (data.subType === 'Formula') {
+                        summaryStats.bottles.formula += amount;
+                    }
+                } else if (data.type === 'Diaper') {
+                    summaryStats.diapers.total++;
+                    if (data.diaperType === 'Pee') {
+                        summaryStats.diapers.pee++;
+                    } else if (data.diaperType === 'Poo') {
+                        summaryStats.diapers.poo++;
+                    } else if (data.diaperType === 'Mixed') {
+                        summaryStats.diapers.mixed++;
+                    }
+                } else if (data.type === 'Pump') {
+                    const amount = convertToOz(data.amount, data.unit);
+                    summaryStats.pumps.total += amount;
+                    summaryStats.pumps.sessions++;
+                }
+
                 hasVisibleEntries = true;
                 const startTime = data.startTime.toDate();
                 const dateKey = formatDateOnly(startTime);
@@ -564,20 +602,27 @@ async function loadTimeline(): Promise<void> {
 
                 let typeDisplay = data.type;
                 let detailsHTML = '';
+                let backgroundColor = '';
 
                 if (data.type === 'Feed') {
                     typeDisplay = `Bottle - ${data.subType}`;
                     detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}</div>`;
+                    backgroundColor = '#d9ebf2';
                 } else if (data.type === 'Breast Feed') {
                     typeDisplay = 'Breast Feed';
                     detailsHTML = '';
+                    backgroundColor = '#d9ebf2';
                 } else if (data.type === 'Diaper') {
                     detailsHTML = `<div class="timeline-entry-details">Type: ${data.diaperType}</div>`;
+                    backgroundColor = '#fce2d4';
                 } else if (data.type === 'Pump') {
                     const endTime = data.endTime ? data.endTime.toDate() : null;
                     const duration = endTime ? Math.round((endTime.getTime() - startTime.getTime()) / 60000) : 0;
                     detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}<br>Duration: ${duration} minutes</div>`;
+                    backgroundColor = '#e2daf2';
                 }
+
+                entry.style.backgroundColor = backgroundColor;
 
                 const notesHTML = data.notes ? `<div class="timeline-entry-notes">${data.notes}</div>` : '';
 
@@ -605,6 +650,58 @@ async function loadTimeline(): Promise<void> {
 
             if (!hasVisibleEntries) {
                 timelineList.innerHTML = '<p>No entries match the selected filters.</p>';
+            } else {
+                // Create and insert summary
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'filter-summary';
+
+                let summaryHTML = '<div class="summary-header">Summary</div><div class="summary-stats">';
+
+                // Show Bottles section if filter is 'all', 'bottle-breast-milk', or 'bottle-formula'
+                if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula') {
+                    summaryHTML += `
+                        <div class="stat-group">
+                            <div class="stat-group-title">Bottles</div>
+                            <div class="stat-line">Number of feeds: ${summaryStats.bottles.sessions}</div>
+                            <div class="stat-line">Breast Milk: ${formatBothUnits(summaryStats.bottles.breastMilk, 'oz')}</div>
+                            <div class="stat-line">Formula: ${formatBothUnits(summaryStats.bottles.formula, 'oz')}</div>
+                            <div class="stat-line">Total volume: ${formatBothUnits(summaryStats.bottles.total, 'oz')}</div>
+                        </div>
+                    `;
+                }
+
+                // Show Diapers section if filter is 'all' or 'diaper'
+                if (typeFilter === 'all' || typeFilter === 'diaper') {
+                    summaryHTML += `
+                        <div class="stat-group">
+                            <div class="stat-group-title">Diapers</div>
+                            <div class="stat-line">Pee: ${summaryStats.diapers.pee}</div>
+                            <div class="stat-line">Poo: ${summaryStats.diapers.poo}</div>
+                            <div class="stat-line">Mixed: ${summaryStats.diapers.mixed}</div>
+                            <div class="stat-line">Total diapers: ${summaryStats.diapers.total}</div>
+                        </div>
+                    `;
+                }
+
+                // Show Pumps section if filter is 'all' or 'pump'
+                if (typeFilter === 'all' || typeFilter === 'pump') {
+                    summaryHTML += `
+                        <div class="stat-group">
+                            <div class="stat-group-title">Pumps</div>
+                            <div class="stat-line">Total volume: ${formatBothUnits(summaryStats.pumps.total, 'oz')}</div>
+                            <div class="stat-line">Number of sessions: ${summaryStats.pumps.sessions}</div>
+                        </div>
+                    `;
+                }
+
+                summaryHTML += '</div>';
+                summaryDiv.innerHTML = summaryHTML;
+
+                // Insert summary after filter section but before timeline list
+                const filterSection = document.querySelector('.filter-section');
+                if (filterSection && filterSection.parentNode) {
+                    filterSection.parentNode.insertBefore(summaryDiv, timelineList);
+                }
             }
         }
     } catch (error) {
@@ -618,29 +715,52 @@ async function loadWeeklyView(): Promise<void> {
     const weeklyStats = document.getElementById('weekly-stats') as HTMLDivElement;
     const loadingDiv = document.getElementById('weekly-loading') as HTMLDivElement;
     const weekRange = document.getElementById('week-range') as HTMLSpanElement;
+    const prevWeekBtn = document.getElementById('prev-week') as HTMLButtonElement;
     const nextWeekBtn = document.getElementById('next-week') as HTMLButtonElement;
     const currentWeekBtn = document.getElementById('current-week') as HTMLButtonElement | null;
 
     const BIRTH_DATE = new Date('2025-11-05');
     const birthWeekStart = getWeekStart(BIRTH_DATE);
+    birthWeekStart.setHours(0, 0, 0, 0);
+
     const today = new Date();
     const currentWeekStartDate = getWeekStart(today);
+    currentWeekStartDate.setHours(0, 0, 0, 0);
 
-    if (currentWeekStart < birthWeekStart) {
+    // Create a normalized copy of currentWeekStart for comparisons (don't mutate the global)
+    const normalizedCurrentWeekStart = new Date(currentWeekStart);
+    normalizedCurrentWeekStart.setHours(0, 0, 0, 0);
+
+    if (normalizedCurrentWeekStart < birthWeekStart) {
         currentWeekStart = new Date(birthWeekStart);
     }
 
-    if (currentWeekStart >= currentWeekStartDate) {
+    // Disable/enable left arrow based on birth week
+    if (normalizedCurrentWeekStart.getTime() <= birthWeekStart.getTime()) {
+        prevWeekBtn.disabled = true;
+    } else {
+        prevWeekBtn.disabled = false;
+    }
+
+    // Disable/enable right arrow based on current week
+    if (normalizedCurrentWeekStart.getTime() >= currentWeekStartDate.getTime()) {
         nextWeekBtn.disabled = true;
     } else {
         nextWeekBtn.disabled = false;
     }
 
+    // Disable/enable Current Week button based on current week
     if (currentWeekBtn) {
-        if (currentWeekStart.getTime() === currentWeekStartDate.getTime()) {
-            currentWeekBtn.style.display = 'none';
+        if (normalizedCurrentWeekStart.getTime() === currentWeekStartDate.getTime()) {
+            currentWeekBtn.disabled = true;
+            currentWeekBtn.style.backgroundColor = '#999';
+            currentWeekBtn.style.color = '#ccc';
+            currentWeekBtn.style.cursor = 'default';
         } else {
-            currentWeekBtn.style.display = 'block';
+            currentWeekBtn.disabled = false;
+            currentWeekBtn.style.backgroundColor = '';
+            currentWeekBtn.style.color = '';
+            currentWeekBtn.style.cursor = 'pointer';
         }
     }
 
@@ -714,17 +834,20 @@ async function loadWeeklyView(): Promise<void> {
         const weeklyContainer = document.createElement('div');
         weeklyContainer.className = 'weekly-scroll-container';
 
-        daysArray.forEach(stats => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let currentDayIndex = -1;
+
+        daysArray.forEach((stats, index) => {
             const dayDiv = document.createElement('div');
             dayDiv.className = 'day-stats';
 
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
             const statsDate = new Date(stats.date);
             statsDate.setHours(0, 0, 0, 0);
 
             if (today.getTime() === statsDate.getTime()) {
                 dayDiv.classList.add('current-day');
+                currentDayIndex = index;
             }
 
             const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][stats.date.getDay()];
@@ -757,6 +880,23 @@ async function loadWeeklyView(): Promise<void> {
         });
 
         weeklyStats.appendChild(weeklyContainer);
+
+        // Auto-scroll to center the current day
+        if (currentDayIndex !== -1) {
+            setTimeout(() => {
+                const currentDayElement = weeklyContainer.children[currentDayIndex] as HTMLElement;
+                if (currentDayElement) {
+                    const containerWidth = weeklyContainer.offsetWidth;
+                    const cardWidth = currentDayElement.offsetWidth;
+                    const scrollPosition = currentDayElement.offsetLeft - (containerWidth / 2) + (cardWidth / 2);
+
+                    weeklyContainer.scrollTo({
+                        left: Math.max(0, scrollPosition),
+                        behavior: 'smooth'
+                    });
+                }
+            }, 100);
+        }
     } catch (error) {
         weeklyStats.innerHTML = '<p class="error">Failed to load weekly view</p>';
     } finally {
@@ -1011,18 +1151,20 @@ async function startLastBottleTimer(): Promise<void> {
 async function updateLastBottleTime(): Promise<void> {
     console.log('Fetching last bottle time...');
     try {
+        // OPTIMIZED: Only fetch Feed entries, ordered by time, limit to 1
+        // This reduces reads from ~200 to just 1 per call
         const q = query(
             collection(db, 'entries'),
-            orderBy('startTime', 'desc')
+            where('type', '==', 'Feed'),
+            orderBy('startTime', 'desc'),
+            limit(1)
         );
         const snapshot = await getDocs(q);
 
-        console.log('Total entries found:', snapshot.docs.length);
+        console.log('Feed entries found:', snapshot.docs.length);
 
-        const lastBottle = snapshot.docs.find(doc => doc.data().type === 'Feed');
-
-        if (lastBottle) {
-            const lastBottleData = lastBottle.data();
+        if (!snapshot.empty) {
+            const lastBottleData = snapshot.docs[0].data();
             const lastBottleTime = lastBottleData.startTime.toDate();
             localStorage.setItem('lastBottleTime', lastBottleTime.toISOString());
             console.log('Last bottle time set:', lastBottleTime);

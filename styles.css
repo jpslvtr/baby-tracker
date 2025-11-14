@@ -725,3 +725,54 @@ button:active {
         margin-bottom: 12px;
     }
 }
+
+.filter-summary {
+    background-color: #e6f3ff;
+    border: 2px solid #4a90e2;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.summary-header {
+    font-weight: bold;
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #4a90e2;
+}
+
+.summary-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+@media (min-width: 769px) {
+    .summary-stats {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .summary-stats .stat-group {
+        flex: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .filter-summary {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .summary-header {
+        font-size: 15px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+    }
+
+    .summary-stats {
+        gap: 12px;
+    }
+}
