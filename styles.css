@@ -689,3 +689,39 @@ button:active {
 .modal-buttons button {
     flex: 1;
 }
+
+.filter-section {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.filter-section label {
+    margin-top: 0;
+    margin-bottom: 5px;
+}
+
+.filter-section select {
+    margin-bottom: 15px;
+}
+
+.filter-section select:last-of-type {
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .filter-section {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .filter-section label {
+        font-size: 14px;
+    }
+
+    .filter-section select {
+        margin-bottom: 12px;
+    }
+}

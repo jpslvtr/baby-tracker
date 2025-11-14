@@ -1,6 +1,5 @@
 node_modules
 transfer
 wm
-secrets.ts
-firebase-config.ts
+config
 repomix-output.xml

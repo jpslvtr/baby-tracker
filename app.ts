@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './secrets';
-import { FIREBASECONFIG } from './firebase-config'
+import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './config/secrets';
+import { FIREBASECONFIG } from './config/firebase-config'
 
 const firebaseApp = initializeApp(FIREBASECONFIG);
 const db = getFirestore(firebaseApp);
@@ -122,7 +122,64 @@ function initializeUI(): void {
     setupEventListeners();
     setDefaultTimes();
     startLastBottleTimer();
+    enforceNumericInputs();
     window.scrollTo(0, 0);
+}
+
+function enforceNumericInputs(): void {
+    // Get all amount input fields
+    const amountInputs = [
+        document.getElementById('bottle-amount') as HTMLInputElement,
+        document.getElementById('pump-amount') as HTMLInputElement,
+        document.getElementById('edit-bottle-amount') as HTMLInputElement,
+        document.getElementById('edit-pump-amount') as HTMLInputElement
+    ];
+
+    amountInputs.forEach(input => {
+        if (!input) return;
+
+        // Prevent non-numeric characters from being typed
+        input.addEventListener('keypress', (e: KeyboardEvent) => {
+            const char = e.key;
+            const currentValue = input.value;
+
+            // Allow: backspace, delete, tab, escape, enter
+            if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab' || e.key === 'Escape' || e.key === 'Enter') {
+                return;
+            }
+
+            // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+            if (e.ctrlKey || e.metaKey) {
+                return;
+            }
+
+            // Allow numbers
+            if (char >= '0' && char <= '9') {
+                return;
+            }
+
+            // Allow decimal point only if there isn't one already
+            if (char === '.' && currentValue.indexOf('.') === -1) {
+                return;
+            }
+
+            // Prevent all other characters
+            e.preventDefault();
+        });
+
+        // Handle paste events to strip non-numeric characters
+        input.addEventListener('paste', (e: ClipboardEvent) => {
+            e.preventDefault();
+            const pastedText = e.clipboardData?.getData('text') || '';
+            const numericText = pastedText.replace(/[^0-9.]/g, '');
+
+            // Ensure only one decimal point
+            const parts = numericText.split('.');
+            const cleanText = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : numericText;
+
+            document.execCommand('insertText', false, cleanText);
+        });
+    });
 }
 
 function validateTime(input: HTMLInputElement): boolean {
@@ -192,6 +249,12 @@ function setupEventListeners(): void {
 
     saveEditBtn.addEventListener('click', saveEdit);
     cancelEditBtn.addEventListener('click', closeEditModal);
+
+    const dateFilter = document.getElementById('date-filter') as HTMLSelectElement;
+    const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
+
+    dateFilter.addEventListener('change', () => loadTimeline());
+    typeFilter.addEventListener('change', () => loadTimeline());
 
     // Attach time validation to all time inputs
     attachTimeValidation('bottle-time');
@@ -420,22 +483,71 @@ function switchTab(tab: string): void {
 async function loadTimeline(): Promise<void> {
     const timelineList = document.getElementById('timeline-list') as HTMLDivElement;
     const loadingDiv = document.getElementById('timeline-loading') as HTMLDivElement;
+    const dateFilter = (document.getElementById('date-filter') as HTMLSelectElement).value;
+    const typeFilter = (document.getElementById('type-filter') as HTMLSelectElement).value;
 
     loadingDiv.style.display = 'block';
     timelineList.innerHTML = '';
 
     try {
-        const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
+        let q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
+
+        // Apply date filter
+        if (dateFilter !== 'all') {
+            const now = new Date();
+            let cutoffDate = new Date();
+
+            if (dateFilter === 'week') {
+                // Last 7 days starting from 7 days ago at midnight
+                cutoffDate.setDate(now.getDate() - 7);
+                cutoffDate.setHours(0, 0, 0, 0);
+            } else {
+                // For 24, 48, 72, 96 - calculate days back from midnight
+                // Subtract 1 because "last 24" means today only (0 days back)
+                const hours = parseInt(dateFilter);
+                const daysBack = Math.floor(hours / 24) - 1;
+                cutoffDate.setDate(now.getDate() - daysBack);
+                cutoffDate.setHours(0, 0, 0, 0);
+            }
+
+            q = query(
+                collection(db, 'entries'),
+                where('startTime', '>=', Timestamp.fromDate(cutoffDate)),
+                orderBy('startTime', 'desc')
+            );
+        }
+
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {
             timelineList.innerHTML = '<p>No entries found.</p>';
         } else {
             let currentDate = '';
+            let hasVisibleEntries = false;
 
             snapshot.forEach(docSnapshot => {
                 const data = docSnapshot.data();
                 const docId = docSnapshot.id;
+
+                // Apply type filter - this works in combination with date filter
+                if (typeFilter !== 'all') {
+                    let entryType = '';
+                    if (data.type === 'Feed' && data.subType === 'Breast Milk') {
+                        entryType = 'bottle-breast-milk';
+                    } else if (data.type === 'Feed' && data.subType === 'Formula') {
+                        entryType = 'bottle-formula';
+                    } else if (data.type === 'Diaper') {
+                        entryType = 'diaper';
+                    } else if (data.type === 'Pump') {
+                        entryType = 'pump';
+                    }
+
+                    if (entryType !== typeFilter) {
+                        return; // Skip this entry - doesn't match type filter
+                    }
+                }
+
+                hasVisibleEntries = true;
                 const startTime = data.startTime.toDate();
                 const dateKey = formatDateOnly(startTime);
 
@@ -490,6 +602,10 @@ async function loadTimeline(): Promise<void> {
 
                 timelineList.appendChild(entry);
             });
+
+            if (!hasVisibleEntries) {
+                timelineList.innerHTML = '<p>No entries match the selected filters.</p>';
+            }
         }
     } catch (error) {
         timelineList.innerHTML = '<p class="error">Failed to load timeline</p>';
@@ -573,6 +689,9 @@ async function loadWeeklyView(): Promise<void> {
                     } else if (data.subType === 'Formula') {
                         dayStats[dateKey].bottles.formula += amount;
                     }
+                } else if (data.type === 'Breast Feed') {
+                    // Count breast feed sessions (from historical data)
+                    dayStats[dateKey].bottles.sessions++;
                 } else if (data.type === 'Diaper') {
                     dayStats[dateKey].diapers.total++;
                     if (data.diaperType === 'Pee') {

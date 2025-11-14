@@ -108,6 +108,28 @@
         <div id="timeline-view" class="view" style="display: none;">
             <div class="panel">
                 <h2>Entries</h2>
+        
+                <div class="filter-section">
+                    <label>Filter by Date:</label>
+                    <select id="date-filter">
+                        <option value="all">All Time</option>
+                        <option value="24">Last 24 Hours</option>
+                        <option value="48">Last 48 Hours</option>
+                        <option value="72">Last 72 Hours</option>
+                        <option value="96">Last 96 Hours</option>
+                        <option value="week">Last Week</option>
+                    </select>
+        
+                    <label>Filter by Type:</label>
+                    <select id="type-filter">
+                        <option value="all">All Types</option>
+                        <option value="bottle-breast-milk">Bottle - Breast Milk</option>
+                        <option value="bottle-formula">Bottle - Formula</option>
+                        <option value="diaper">Diaper</option>
+                        <option value="pump">Pump</option>
+                    </select>
+                </div>
+        
                 <div id="timeline-loading">Loading...</div>
                 <div id="timeline-list"></div>
             </div>
