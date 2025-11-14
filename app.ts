@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { PASSCODE } from './secrets';
 
 const firebaseConfig = {
     apiKey: "AIzaSyA66X3tR-oquob5ZbBrrHv_EAmhwEHTi48",
@@ -12,8 +13,6 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
-
-const PASSCODE = "1234";
 
 interface Entry {
     type: string;
