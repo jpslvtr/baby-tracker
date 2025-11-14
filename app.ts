@@ -95,6 +95,64 @@ function initializeUI(): void {
     startLastBottleTimer();
 }
 
+function roundToNearest5Minutes(date: Date): Date {
+    const rounded = new Date(date);
+    const minutes = rounded.getMinutes();
+    const roundedMinutes = Math.round(minutes / 5) * 5;
+
+    // Handle case where rounding gives us 60 minutes
+    if (roundedMinutes === 60) {
+        rounded.setHours(rounded.getHours() + 1);
+        rounded.setMinutes(0);
+    } else {
+        rounded.setMinutes(roundedMinutes);
+    }
+
+    rounded.setSeconds(0);
+    rounded.setMilliseconds(0);
+    return rounded;
+}
+
+function validateAndRoundTime(input: HTMLInputElement): boolean {
+    if (!input.value) return true;
+
+    const selectedTime = new Date(input.value);
+    const now = new Date();
+    const maxAllowedTime = roundToNearest5Minutes(now);
+
+    // Check if time is in the future
+    if (selectedTime > maxAllowedTime) {
+        alert(`Cannot select future times. Setting to most recent valid time: ${formatDisplayDateTime(maxAllowedTime)}`);
+        input.value = formatDateTime(maxAllowedTime);
+        return false;
+    }
+
+    // Silently round to nearest 5-minute increment if needed
+    const minutes = selectedTime.getMinutes();
+    if (minutes % 5 !== 0) {
+        const roundedTime = roundToNearest5Minutes(selectedTime);
+        input.value = formatDateTime(roundedTime);
+        return false;
+    }
+
+    return true;
+}
+
+function attachTimeValidation(inputId: string): void {
+    const input = document.getElementById(inputId) as HTMLInputElement;
+    if (!input) return;
+
+    // Validate on blur (when user leaves the field)
+    input.addEventListener('blur', () => {
+        validateAndRoundTime(input);
+    });
+
+    // Validate on change
+    input.addEventListener('change', () => {
+        validateAndRoundTime(input);
+    });
+}
+
 function setupEventListeners(): void {
     const entryTypeSelect = document.getElementById('entry-type') as HTMLSelectElement;
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
@@ -125,23 +183,22 @@ function setupEventListeners(): void {
 
     saveEditBtn.addEventListener('click', saveEdit);
     cancelEditBtn.addEventListener('click', closeEditModal);
-}
 
-function roundToNearest5Minutes(date: Date): Date {
-    const rounded = new Date(date);
-    const minutes = rounded.getMinutes();
-    const roundedMinutes = Math.round(minutes / 5) * 5;
-    rounded.setMinutes(roundedMinutes);
-    rounded.setSeconds(0);
-    rounded.setMilliseconds(0);
-    return rounded;
+    // Attach time validation to all time inputs
+    attachTimeValidation('bottle-time');
+    attachTimeValidation('diaper-time');
+    attachTimeValidation('pump-start-time');
+    attachTimeValidation('pump-end-time');
+    attachTimeValidation('edit-bottle-time');
+    attachTimeValidation('edit-diaper-time');
+    attachTimeValidation('edit-pump-start-time');
+    attachTimeValidation('edit-pump-end-time');
 }
 
 function setDefaultTimes(): void {
     const now = new Date();
     const rounded = roundToNearest5Minutes(now);
     const formatted = formatDateTime(rounded);
-    const maxFormatted = formatDateTime(now);
 
     const bottleTime = document.getElementById('bottle-time') as HTMLInputElement | null;
     const diaperTime = document.getElementById('diaper-time') as HTMLInputElement | null;
@@ -150,19 +207,15 @@ function setDefaultTimes(): void {
 
     if (bottleTime) {
         bottleTime.value = formatted;
-        bottleTime.max = maxFormatted;
     }
     if (diaperTime) {
         diaperTime.value = formatted;
-        diaperTime.max = maxFormatted;
     }
     if (pumpStartTime) {
         pumpStartTime.value = formatted;
-        pumpStartTime.max = maxFormatted;
     }
     if (pumpEndTime) {
         pumpEndTime.value = formatted;
-        pumpEndTime.max = maxFormatted;
     }
 }
 
@@ -202,18 +255,29 @@ async function handleSubmitEntry(): Promise<void> {
     try {
         let entry: Entry | null = null;
         const now = new Date();
+        const maxAllowedTime = roundToNearest5Minutes(now);
 
         if (entryType === 'bottle-breast-milk' || entryType === 'bottle-formula') {
-            const time = (document.getElementById('bottle-time') as HTMLInputElement).value;
+            const timeInput = document.getElementById('bottle-time') as HTMLInputElement;
+            const time = timeInput.value;
             const amount = parseFloat((document.getElementById('bottle-amount') as HTMLInputElement).value);
             const notes = (document.getElementById('bottle-notes') as HTMLTextAreaElement).value;
 
             if (!time) {
                 throw new Error('Start time is required');
             }
-            const selectedTime = new Date(time);
-            if (selectedTime > now) {
+
+            // Validate time before submitting
+            if (!validateAndRoundTime(timeInput)) {
+                throw new Error('Please correct the time before submitting');
+            }
+
+            const selectedTime = new Date(timeInput.value);
+            if (selectedTime > maxAllowedTime) {
                 throw new Error('Cannot add entries in the future');
+            }
+            if (selectedTime.getMinutes() % 5 !== 0) {
+                throw new Error('Time must be in 5-minute increments');
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
@@ -228,16 +292,25 @@ async function handleSubmitEntry(): Promise<void> {
                 notes: notes
             };
         } else if (entryType === 'diaper') {
-            const time = (document.getElementById('diaper-time') as HTMLInputElement).value;
+            const timeInput = document.getElementById('diaper-time') as HTMLInputElement;
+            const time = timeInput.value;
             const diaperType = (document.getElementById('diaper-type') as HTMLSelectElement).value;
             const notes = (document.getElementById('diaper-notes') as HTMLTextAreaElement).value;
 
             if (!time) {
                 throw new Error('Start time is required');
             }
-            const selectedTime = new Date(time);
-            if (selectedTime > now) {
+
+            if (!validateAndRoundTime(timeInput)) {
+                throw new Error('Please correct the time before submitting');
+            }
+
+            const selectedTime = new Date(timeInput.value);
+            if (selectedTime > maxAllowedTime) {
                 throw new Error('Cannot add entries in the future');
+            }
+            if (selectedTime.getMinutes() % 5 !== 0) {
+                throw new Error('Time must be in 5-minute increments');
             }
             if (!diaperType) {
                 throw new Error('Diaper type is required');
@@ -250,8 +323,10 @@ async function handleSubmitEntry(): Promise<void> {
                 notes: notes
             };
         } else if (entryType === 'pump') {
-            const startTime = (document.getElementById('pump-start-time') as HTMLInputElement).value;
-            const endTime = (document.getElementById('pump-end-time') as HTMLInputElement).value;
+            const startTimeInput = document.getElementById('pump-start-time') as HTMLInputElement;
+            const endTimeInput = document.getElementById('pump-end-time') as HTMLInputElement;
+            const startTime = startTimeInput.value;
+            const endTime = endTimeInput.value;
             const amount = parseFloat((document.getElementById('pump-amount') as HTMLInputElement).value);
             const notes = (document.getElementById('pump-notes') as HTMLTextAreaElement).value;
 
@@ -261,13 +336,21 @@ async function handleSubmitEntry(): Promise<void> {
             if (!endTime) {
                 throw new Error('End time is required');
             }
-            const selectedStartTime = new Date(startTime);
-            const selectedEndTime = new Date(endTime);
-            if (selectedStartTime > now) {
+
+            if (!validateAndRoundTime(startTimeInput) || !validateAndRoundTime(endTimeInput)) {
+                throw new Error('Please correct the times before submitting');
+            }
+
+            const selectedStartTime = new Date(startTimeInput.value);
+            const selectedEndTime = new Date(endTimeInput.value);
+            if (selectedStartTime > maxAllowedTime) {
                 throw new Error('Cannot add entries in the future');
             }
-            if (selectedEndTime > now) {
+            if (selectedEndTime > maxAllowedTime) {
                 throw new Error('Cannot add entries in the future');
+            }
+            if (selectedStartTime.getMinutes() % 5 !== 0 || selectedEndTime.getMinutes() % 5 !== 0) {
+                throw new Error('Times must be in 5-minute increments');
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
@@ -671,45 +754,75 @@ async function saveEdit(): Promise<void> {
         const editPumpFields = document.getElementById('edit-pump-fields') as HTMLElement;
 
         let updateData: any = {};
+        const now = new Date();
+        const maxAllowedTime = roundToNearest5Minutes(now);
 
         if (editBottleFields.style.display === 'block') {
-            const time = (document.getElementById('edit-bottle-time') as HTMLInputElement).value;
+            const timeInput = document.getElementById('edit-bottle-time') as HTMLInputElement;
+            const time = timeInput.value;
             const amount = parseFloat((document.getElementById('edit-bottle-amount') as HTMLInputElement).value);
             const notes = (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value;
 
             if (!time) {
                 throw new Error('Start time is required');
             }
+
+            if (!validateAndRoundTime(timeInput)) {
+                throw new Error('Please correct the time before saving');
+            }
+
+            const selectedTime = new Date(timeInput.value);
+            if (selectedTime > maxAllowedTime) {
+                throw new Error('Cannot set time in the future');
+            }
+            if (selectedTime.getMinutes() % 5 !== 0) {
+                throw new Error('Time must be in 5-minute increments');
+            }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
             }
 
             updateData = {
-                startTime: Timestamp.fromDate(new Date(time)),
+                startTime: Timestamp.fromDate(selectedTime),
                 amount: amount,
                 unit: 'oz',
                 notes: notes
             };
         } else if (editDiaperFields.style.display === 'block') {
-            const time = (document.getElementById('edit-diaper-time') as HTMLInputElement).value;
+            const timeInput = document.getElementById('edit-diaper-time') as HTMLInputElement;
+            const time = timeInput.value;
             const diaperType = (document.getElementById('edit-diaper-type') as HTMLSelectElement).value;
             const notes = (document.getElementById('edit-diaper-notes') as HTMLTextAreaElement).value;
 
             if (!time) {
                 throw new Error('Start time is required');
             }
+
+            if (!validateAndRoundTime(timeInput)) {
+                throw new Error('Please correct the time before saving');
+            }
+
+            const selectedTime = new Date(timeInput.value);
+            if (selectedTime > maxAllowedTime) {
+                throw new Error('Cannot set time in the future');
+            }
+            if (selectedTime.getMinutes() % 5 !== 0) {
+                throw new Error('Time must be in 5-minute increments');
+            }
             if (!diaperType) {
                 throw new Error('Diaper type is required');
             }
 
             updateData = {
-                startTime: Timestamp.fromDate(new Date(time)),
+                startTime: Timestamp.fromDate(selectedTime),
                 diaperType: diaperType,
                 notes: notes
             };
         } else if (editPumpFields.style.display === 'block') {
-            const startTime = (document.getElementById('edit-pump-start-time') as HTMLInputElement).value;
-            const endTime = (document.getElementById('edit-pump-end-time') as HTMLInputElement).value;
+            const startTimeInput = document.getElementById('edit-pump-start-time') as HTMLInputElement;
+            const endTimeInput = document.getElementById('edit-pump-end-time') as HTMLInputElement;
+            const startTime = startTimeInput.value;
+            const endTime = endTimeInput.value;
             const amount = parseFloat((document.getElementById('edit-pump-amount') as HTMLInputElement).value);
             const notes = (document.getElementById('edit-pump-notes') as HTMLTextAreaElement).value;
 
@@ -719,13 +832,29 @@ async function saveEdit(): Promise<void> {
             if (!endTime) {
                 throw new Error('End time is required');
             }
+
+            if (!validateAndRoundTime(startTimeInput) || !validateAndRoundTime(endTimeInput)) {
+                throw new Error('Please correct the times before saving');
+            }
+
+            const selectedStartTime = new Date(startTimeInput.value);
+            const selectedEndTime = new Date(endTimeInput.value);
+            if (selectedStartTime > maxAllowedTime) {
+                throw new Error('Cannot set time in the future');
+            }
+            if (selectedEndTime > maxAllowedTime) {
+                throw new Error('Cannot set time in the future');
+            }
+            if (selectedStartTime.getMinutes() % 5 !== 0 || selectedEndTime.getMinutes() % 5 !== 0) {
+                throw new Error('Times must be in 5-minute increments');
+            }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
             }
 
             updateData = {
-                startTime: Timestamp.fromDate(new Date(startTime)),
-                endTime: Timestamp.fromDate(new Date(endTime)),
+                startTime: Timestamp.fromDate(selectedStartTime),
+                endTime: Timestamp.fromDate(selectedEndTime),
                 amount: amount,
                 unit: 'oz',
                 notes: notes
