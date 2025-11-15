@@ -39,6 +39,25 @@
                     <div class="last-bottle-value">Loading...</div>
                 </div>
 
+                <div class="timer-grid">
+                    <div class="timer-item">
+                        <div class="timer-label">Time since last Pee:</div>
+                        <div id="last-pee-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Time since last Poo:</div>
+                        <div id="last-poo-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Time since last Mixed:</div>
+                        <div id="last-mixed-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Time since last Pump:</div>
+                        <div id="last-pump-value" class="timer-value">Loading...</div>
+                    </div>
+                </div>
+
                 <label>Entry Type:</label>
                 <select id="entry-type">
                     <option value="">Select type...</option>
@@ -110,20 +129,25 @@
                 <h2>Entries</h2>
 
                 <div class="filter-section">
+                    <div class="quick-filters">
+                        <button id="today-button" class="quick-filter-button">Today</button>
+                        <button id="last-48-button" class="quick-filter-button">Last 48h</button>
+                        <button id="last-72-button" class="quick-filter-button">Last 72h</button>
+                        <button id="last-week-button" class="quick-filter-button">Last Week</button>
+                        <button id="all-time-button" class="quick-filter-button">All Time</button>
+                    </div>
+
                     <label>Start Date:</label>
                     <input type="date" id="start-date-filter">
 
                     <label>End Date:</label>
                     <input type="date" id="end-date-filter">
 
-                    <button id="all-time-button" class="quick-filter-button">All Time</button>
-
                     <label>Filter by Type:</label>
                     <select id="type-filter">
                         <option value="all">All Types</option>
                         <option value="bottle-breast-milk">Bottle - Breast Milk</option>
                         <option value="bottle-formula">Bottle - Formula</option>
-                        <option value="diaper">Diaper</option>
                         <option value="pump">Pump</option>
                     </select>
                 </div>

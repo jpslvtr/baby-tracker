@@ -46,6 +46,10 @@ interface Entry {
 let currentWeekStart: Date = getWeekStart(new Date());
 let currentEditingEntryId: string | null = null;
 let lastBottleTimerInterval: number | null = null;
+let lastPeeTimerInterval: number | null = null;
+let lastPooTimerInterval: number | null = null;
+let lastMixedTimerInterval: number | null = null;
+let lastPumpTimerInterval: number | null = null;
 
 function getWeekStart(date: Date): Date {
     const d = new Date(date);
@@ -126,8 +130,9 @@ function initializeUI(): void {
     setupEventListeners();
     setDefaultTimes();
     setDefaultDateFilters();
-    startLastBottleTimer();
+    startAllTimers();
     enforceNumericInputs();
+    setupUnitConversion();
     window.scrollTo(0, 0);
 }
 
@@ -189,6 +194,66 @@ function enforceNumericInputs(): void {
             document.execCommand('insertText', false, cleanText);
         });
     });
+}
+
+function setupUnitConversion(): void {
+    const bottleUnit = document.getElementById('bottle-unit') as HTMLSelectElement;
+    const bottleAmount = document.getElementById('bottle-amount') as HTMLInputElement;
+    const pumpUnit = document.getElementById('pump-unit') as HTMLSelectElement;
+    const pumpAmount = document.getElementById('pump-amount') as HTMLInputElement;
+    const editBottleUnit = document.getElementById('edit-bottle-unit') as HTMLSelectElement;
+    const editBottleAmount = document.getElementById('edit-bottle-amount') as HTMLInputElement;
+    const editPumpUnit = document.getElementById('edit-pump-unit') as HTMLSelectElement;
+    const editPumpAmount = document.getElementById('edit-pump-amount') as HTMLInputElement;
+
+    if (bottleUnit && bottleAmount) {
+        bottleUnit.addEventListener('change', () => {
+            convertAmountInInput(bottleAmount, bottleUnit.value);
+        });
+    }
+
+    if (pumpUnit && pumpAmount) {
+        pumpUnit.addEventListener('change', () => {
+            convertAmountInInput(pumpAmount, pumpUnit.value);
+        });
+    }
+
+    if (editBottleUnit && editBottleAmount) {
+        editBottleUnit.addEventListener('change', () => {
+            convertAmountInInput(editBottleAmount, editBottleUnit.value);
+        });
+    }
+
+    if (editPumpUnit && editPumpAmount) {
+        editPumpUnit.addEventListener('change', () => {
+            convertAmountInInput(editPumpAmount, editPumpUnit.value);
+        });
+    }
+}
+
+function convertAmountInInput(amountInput: HTMLInputElement, newUnit: string): void {
+    const currentValue = parseFloat(amountInput.value);
+    if (isNaN(currentValue) || currentValue <= 0) {
+        return;
+    }
+
+    const previousUnit = amountInput.dataset.lastUnit || 'oz';
+
+    if (previousUnit === newUnit) {
+        return;
+    }
+
+    let convertedValue: number;
+    if (newUnit === 'ml' && previousUnit === 'oz') {
+        convertedValue = currentValue * 29.5735;
+    } else if (newUnit === 'oz' && previousUnit === 'ml') {
+        convertedValue = currentValue * 0.033814;
+    } else {
+        return;
+    }
+
+    amountInput.value = convertedValue.toFixed(2);
+    amountInput.dataset.lastUnit = newUnit;
 }
 
 function validateTime(input: HTMLInputElement): boolean {
@@ -257,12 +322,20 @@ function setupEventListeners(): void {
     const startDateFilter = document.getElementById('start-date-filter') as HTMLInputElement;
     const endDateFilter = document.getElementById('end-date-filter') as HTMLInputElement;
     const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
+    const todayButton = document.getElementById('today-button') as HTMLButtonElement;
+    const last48Button = document.getElementById('last-48-button') as HTMLButtonElement;
+    const last72Button = document.getElementById('last-72-button') as HTMLButtonElement;
+    const lastWeekButton = document.getElementById('last-week-button') as HTMLButtonElement;
     const allTimeButton = document.getElementById('all-time-button') as HTMLButtonElement;
 
     startDateFilter.addEventListener('change', () => loadTimeline());
     endDateFilter.addEventListener('change', () => loadTimeline());
     typeFilter.addEventListener('change', () => loadTimeline());
-    allTimeButton.addEventListener('click', handleAllTimeClick);
+    todayButton.addEventListener('click', () => handleQuickFilter('today'));
+    last48Button.addEventListener('click', () => handleQuickFilter('last-48'));
+    last72Button.addEventListener('click', () => handleQuickFilter('last-72'));
+    lastWeekButton.addEventListener('click', () => handleQuickFilter('last-week'));
+    allTimeButton.addEventListener('click', () => handleQuickFilter('all-time'));
 
     attachTimeValidation('bottle-time');
     attachTimeValidation('diaper-time');
@@ -313,12 +386,18 @@ function handleEntryTypeChange(event: Event): void {
     if (value === 'bottle-breast-milk' || value === 'bottle-formula') {
         bottleFields.style.display = 'block';
         submitButton.style.display = 'block';
+        const bottleUnit = document.getElementById('bottle-unit') as HTMLSelectElement;
+        const bottleAmount = document.getElementById('bottle-amount') as HTMLInputElement;
+        bottleAmount.dataset.lastUnit = bottleUnit.value;
     } else if (value === 'diaper') {
         diaperFields.style.display = 'block';
         submitButton.style.display = 'block';
     } else if (value === 'pump') {
         pumpFields.style.display = 'block';
         submitButton.style.display = 'block';
+        const pumpUnit = document.getElementById('pump-unit') as HTMLSelectElement;
+        const pumpAmount = document.getElementById('pump-amount') as HTMLInputElement;
+        pumpAmount.dataset.lastUnit = pumpUnit.value;
     } else {
         submitButton.style.display = 'none';
     }
@@ -437,7 +516,11 @@ async function handleSubmitEntry(): Promise<void> {
             clearForm();
 
             if (entry.type === 'Feed') {
-                updateLastBottleTime();
+                await updateLastBottleTime();
+            } else if (entry.type === 'Diaper') {
+                await updateLastDiaperTimes();
+            } else if (entry.type === 'Pump') {
+                await updateLastPumpTime();
             }
 
             setTimeout(() => {
@@ -487,12 +570,34 @@ function switchTab(tab: string): void {
     window.scrollTo(0, 0);
 }
 
-function handleAllTimeClick(): void {
+function handleQuickFilter(filterType: string): void {
     const startDateInput = document.getElementById('start-date-filter') as HTMLInputElement;
     const endDateInput = document.getElementById('end-date-filter') as HTMLInputElement;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    startDateInput.value = '';
-    endDateInput.value = '';
+    if (filterType === 'all-time') {
+        startDateInput.value = '';
+        endDateInput.value = '';
+    } else if (filterType === 'today') {
+        startDateInput.value = formatDateForInput(today);
+        endDateInput.value = formatDateForInput(today);
+    } else if (filterType === 'last-48') {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDateInput.value = formatDateForInput(yesterday);
+        endDateInput.value = formatDateForInput(today);
+    } else if (filterType === 'last-72') {
+        const twoDaysAgo = new Date(today);
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        startDateInput.value = formatDateForInput(twoDaysAgo);
+        endDateInput.value = formatDateForInput(today);
+    } else if (filterType === 'last-week') {
+        const sixDaysAgo = new Date(today);
+        sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+        startDateInput.value = formatDateForInput(sixDaysAgo);
+        endDateInput.value = formatDateForInput(today);
+    }
 
     loadTimeline();
 }
@@ -516,7 +621,6 @@ async function loadTimeline(): Promise<void> {
         let q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
 
         if (startDateInput && endDateInput) {
-            // Parse dates in local timezone to avoid UTC conversion issues
             const [startYear, startMonth, startDay] = startDateInput.split('-').map(Number);
             const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
 
@@ -967,9 +1071,12 @@ function openEditModal(docId: string, data: any): void {
 
     if (data.type === 'Feed') {
         editBottleFields.style.display = 'block';
+        const editBottleUnit = document.getElementById('edit-bottle-unit') as HTMLSelectElement;
+        const editBottleAmount = document.getElementById('edit-bottle-amount') as HTMLInputElement;
         (document.getElementById('edit-bottle-time') as HTMLInputElement).value = formatDateTime(startTime);
-        (document.getElementById('edit-bottle-amount') as HTMLInputElement).value = data.amount.toFixed(2);
-        (document.getElementById('edit-bottle-unit') as HTMLSelectElement).value = data.unit || 'oz';
+        editBottleAmount.value = data.amount.toFixed(2);
+        editBottleUnit.value = data.unit || 'oz';
+        editBottleAmount.dataset.lastUnit = data.unit || 'oz';
         (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value = data.notes || '';
     } else if (data.type === 'Diaper') {
         editDiaperFields.style.display = 'block';
@@ -978,11 +1085,14 @@ function openEditModal(docId: string, data: any): void {
         (document.getElementById('edit-diaper-notes') as HTMLTextAreaElement).value = data.notes || '';
     } else if (data.type === 'Pump') {
         editPumpFields.style.display = 'block';
+        const editPumpUnit = document.getElementById('edit-pump-unit') as HTMLSelectElement;
+        const editPumpAmount = document.getElementById('edit-pump-amount') as HTMLInputElement;
         const endTime = data.endTime ? data.endTime.toDate() : startTime;
         (document.getElementById('edit-pump-start-time') as HTMLInputElement).value = formatDateTime(startTime);
         (document.getElementById('edit-pump-end-time') as HTMLInputElement).value = formatDateTime(endTime);
-        (document.getElementById('edit-pump-amount') as HTMLInputElement).value = data.amount.toFixed(2);
-        (document.getElementById('edit-pump-unit') as HTMLSelectElement).value = data.unit || 'oz';
+        editPumpAmount.value = data.amount.toFixed(2);
+        editPumpUnit.value = data.unit || 'oz';
+        editPumpAmount.dataset.lastUnit = data.unit || 'oz';
         (document.getElementById('edit-pump-notes') as HTMLTextAreaElement).value = data.notes || '';
     }
 
@@ -1102,9 +1212,10 @@ async function saveEdit(): Promise<void> {
         statusDiv.textContent = 'Entry updated successfully!';
         statusDiv.style.display = 'block';
 
-        setTimeout(() => {
+        setTimeout(async () => {
             closeEditModal();
             loadTimeline();
+            await updateAllEventTimes();
         }, 1000);
     } catch (error) {
         statusDiv.className = 'error';
@@ -1121,29 +1232,37 @@ async function deleteEntry(docId: string): Promise<void> {
     try {
         await deleteDoc(doc(db, 'entries', docId));
         loadTimeline();
-        updateLastBottleTime();
+        await updateAllEventTimes();
     } catch (error) {
         alert('Failed to delete entry');
     }
 }
 
-async function startLastBottleTimer(): Promise<void> {
-    console.log('Starting last bottle timer...');
-    await updateLastBottleTime();
+async function startAllTimers(): Promise<void> {
+    await updateAllEventTimes();
 
-    if (lastBottleTimerInterval) {
-        clearInterval(lastBottleTimerInterval);
-    }
+    if (lastBottleTimerInterval) clearInterval(lastBottleTimerInterval);
+    if (lastPeeTimerInterval) clearInterval(lastPeeTimerInterval);
+    if (lastPooTimerInterval) clearInterval(lastPooTimerInterval);
+    if (lastMixedTimerInterval) clearInterval(lastMixedTimerInterval);
+    if (lastPumpTimerInterval) clearInterval(lastPumpTimerInterval);
 
-    lastBottleTimerInterval = window.setInterval(() => {
-        updateLastBottleDisplay();
-    }, 1000);
+    lastBottleTimerInterval = window.setInterval(() => updateLastBottleDisplay(), 1000);
+    lastPeeTimerInterval = window.setInterval(() => updateLastPeeDisplay(), 1000);
+    lastPooTimerInterval = window.setInterval(() => updateLastPooDisplay(), 1000);
+    lastMixedTimerInterval = window.setInterval(() => updateLastMixedDisplay(), 1000);
+    lastPumpTimerInterval = window.setInterval(() => updateLastPumpDisplay(), 1000);
+}
 
-    console.log('Timer started, interval ID:', lastBottleTimerInterval);
+async function updateAllEventTimes(): Promise<void> {
+    await Promise.all([
+        updateLastBottleTime(),
+        updateLastDiaperTimes(),
+        updateLastPumpTime()
+    ]);
 }
 
 async function updateLastBottleTime(): Promise<void> {
-    console.log('Fetching last bottle time...');
     try {
         const q = query(
             collection(db, 'entries'),
@@ -1153,58 +1272,156 @@ async function updateLastBottleTime(): Promise<void> {
         );
         const snapshot = await getDocs(q);
 
-        console.log('Feed entries found:', snapshot.docs.length);
-
         if (!snapshot.empty) {
             const lastBottleData = snapshot.docs[0].data();
             const lastBottleTime = lastBottleData.startTime.toDate();
             localStorage.setItem('lastBottleTime', lastBottleTime.toISOString());
-            console.log('Last bottle time set:', lastBottleTime);
         } else {
             localStorage.removeItem('lastBottleTime');
-            console.log('No bottle entries found');
         }
 
         updateLastBottleDisplay();
     } catch (error) {
         console.error('Error fetching last bottle time:', error);
-        const displayElement = document.querySelector('.last-bottle-value') as HTMLElement;
-        if (displayElement) {
-            displayElement.textContent = 'Error loading';
-        }
     }
 }
 
-function updateLastBottleDisplay(): void {
-    const displayElement = document.querySelector('.last-bottle-value') as HTMLElement;
-    if (!displayElement) {
-        console.log('Display element not found');
-        return;
+async function updateLastDiaperTimes(): Promise<void> {
+    try {
+        const q = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Diaper'),
+            orderBy('startTime', 'desc')
+        );
+        const snapshot = await getDocs(q);
+
+        let lastPee: Date | undefined = undefined;
+        let lastPoo: Date | undefined = undefined;
+        let lastMixed: Date | undefined = undefined;
+
+        snapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            const time = data.startTime.toDate() as Date;
+
+            if (data.diaperType === 'Pee' && lastPee === undefined) {
+                lastPee = time;
+            } else if (data.diaperType === 'Poo' && lastPoo === undefined) {
+                lastPoo = time;
+            } else if (data.diaperType === 'Mixed' && lastMixed === undefined) {
+                lastMixed = time;
+            }
+        });
+
+        if (lastPee !== undefined) {
+            localStorage.setItem('lastPeeTime', (lastPee as Date).toISOString());
+        } else {
+            localStorage.removeItem('lastPeeTime');
+        }
+
+        if (lastPoo !== undefined) {
+            localStorage.setItem('lastPooTime', (lastPoo as Date).toISOString());
+        } else {
+            localStorage.removeItem('lastPooTime');
+        }
+
+        if (lastMixed !== undefined) {
+            localStorage.setItem('lastMixedTime', (lastMixed as Date).toISOString());
+        } else {
+            localStorage.removeItem('lastMixedTime');
+        }
+
+        updateLastPeeDisplay();
+        updateLastPooDisplay();
+        updateLastMixedDisplay();
+    } catch (error) {
+        console.error('Error fetching last diaper times:', error);
+    }
+}
+
+async function updateLastPumpTime(): Promise<void> {
+    try {
+        const q = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Pump'),
+            orderBy('startTime', 'desc'),
+            limit(1)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+            const lastPumpData = snapshot.docs[0].data();
+            const lastPumpTime = lastPumpData.startTime.toDate();
+            localStorage.setItem('lastPumpTime', lastPumpTime.toISOString());
+        } else {
+            localStorage.removeItem('lastPumpTime');
+        }
+
+        updateLastPumpDisplay();
+    } catch (error) {
+        console.error('Error fetching last pump time:', error);
+    }
+}
+
+function formatTimeDifference(timeStr: string | null, defaultMessage: string): string {
+    if (!timeStr) {
+        return defaultMessage;
     }
 
-    const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
-    console.log('Updating display, last bottle time from storage:', lastBottleTimeStr);
-
-    if (!lastBottleTimeStr) {
-        displayElement.textContent = 'No bottles recorded';
-        return;
-    }
-
-    const lastBottleTime = new Date(lastBottleTimeStr);
+    const eventTime = new Date(timeStr);
     const now = new Date();
-    const diffMs = now.getTime() - lastBottleTime.getTime();
+    const diffMs = now.getTime() - eventTime.getTime();
 
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
 
     if (hours > 0) {
-        displayElement.textContent = `${hours}h ${minutes}m ${seconds}s`;
+        return `${hours}h ${minutes}m ${seconds}s`;
     } else if (minutes > 0) {
-        displayElement.textContent = `${minutes}m ${seconds}s`;
+        return `${minutes}m ${seconds}s`;
     } else {
-        displayElement.textContent = `${seconds}s`;
+        return `${seconds}s`;
     }
+}
+
+function updateLastBottleDisplay(): void {
+    const displayElement = document.querySelector('.last-bottle-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
+    displayElement.textContent = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
+}
+
+function updateLastPeeDisplay(): void {
+    const displayElement = document.getElementById('last-pee-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastPeeTimeStr = localStorage.getItem('lastPeeTime');
+    displayElement.textContent = formatTimeDifference(lastPeeTimeStr, 'No pee recorded');
+}
+
+function updateLastPooDisplay(): void {
+    const displayElement = document.getElementById('last-poo-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastPooTimeStr = localStorage.getItem('lastPooTime');
+    displayElement.textContent = formatTimeDifference(lastPooTimeStr, 'No poo recorded');
+}
+
+function updateLastMixedDisplay(): void {
+    const displayElement = document.getElementById('last-mixed-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastMixedTimeStr = localStorage.getItem('lastMixedTime');
+    displayElement.textContent = formatTimeDifference(lastMixedTimeStr, 'No mixed recorded');
+}
+
+function updateLastPumpDisplay(): void {
+    const displayElement = document.getElementById('last-pump-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastPumpTimeStr = localStorage.getItem('lastPumpTime');
+    displayElement.textContent = formatTimeDifference(lastPumpTimeStr, 'No pumps recorded');
 }
 
 document.getElementById('passcode-submit')?.addEventListener('click', checkPasscode);
