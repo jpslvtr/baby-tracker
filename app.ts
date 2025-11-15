@@ -664,7 +664,11 @@ async function loadTimeline(): Promise<void> {
                         entryType = 'pump';
                     }
 
-                    if (entryType !== typeFilter) {
+                    if (typeFilter === 'bottle-all') {
+                        if (data.type !== 'Feed') {
+                            return;
+                        }
+                    } else if (entryType !== typeFilter) {
                         return;
                     }
                 }
@@ -764,7 +768,7 @@ async function loadTimeline(): Promise<void> {
 
                 let summaryHTML = '<div class="summary-header">Summary</div><div class="summary-stats">';
 
-                if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula') {
+                if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula' || typeFilter === 'bottle-all') {
                     summaryHTML += `
                         <div class="stat-group">
                             <div class="stat-group-title">Bottles</div>
