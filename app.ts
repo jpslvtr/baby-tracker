@@ -1373,11 +1373,14 @@ function formatTimeDifference(timeStr: string | null, defaultMessage: string): s
 
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
 
     if (hours > 0) {
-        return `${hours}h ${minutes}m`;
+        return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
     } else {
-        return `${minutes}m`;
+        return `${seconds}s`;
     }
 }
 
