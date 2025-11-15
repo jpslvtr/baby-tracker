@@ -48,7 +48,6 @@ let currentEditingEntryId: string | null = null;
 let lastBottleTimerInterval: number | null = null;
 let lastPeeTimerInterval: number | null = null;
 let lastPooTimerInterval: number | null = null;
-let lastMixedTimerInterval: number | null = null;
 let lastPumpTimerInterval: number | null = null;
 
 function getWeekStart(date: Date): Date {
@@ -1244,13 +1243,11 @@ async function startAllTimers(): Promise<void> {
     if (lastBottleTimerInterval) clearInterval(lastBottleTimerInterval);
     if (lastPeeTimerInterval) clearInterval(lastPeeTimerInterval);
     if (lastPooTimerInterval) clearInterval(lastPooTimerInterval);
-    if (lastMixedTimerInterval) clearInterval(lastMixedTimerInterval);
     if (lastPumpTimerInterval) clearInterval(lastPumpTimerInterval);
 
     lastBottleTimerInterval = window.setInterval(() => updateLastBottleDisplay(), 1000);
     lastPeeTimerInterval = window.setInterval(() => updateLastPeeDisplay(), 1000);
     lastPooTimerInterval = window.setInterval(() => updateLastPooDisplay(), 1000);
-    lastMixedTimerInterval = window.setInterval(() => updateLastMixedDisplay(), 1000);
     lastPumpTimerInterval = window.setInterval(() => updateLastPumpDisplay(), 1000);
 }
 
@@ -1297,18 +1294,16 @@ async function updateLastDiaperTimes(): Promise<void> {
 
         let lastPee: Date | undefined = undefined;
         let lastPoo: Date | undefined = undefined;
-        let lastMixed: Date | undefined = undefined;
 
         snapshot.forEach(docSnapshot => {
             const data = docSnapshot.data();
             const time = data.startTime.toDate() as Date;
 
-            if (data.diaperType === 'Pee' && lastPee === undefined) {
+            if ((data.diaperType === 'Pee' || data.diaperType === 'Mixed') && lastPee === undefined) {
                 lastPee = time;
-            } else if (data.diaperType === 'Poo' && lastPoo === undefined) {
+            }
+            if ((data.diaperType === 'Poo' || data.diaperType === 'Mixed') && lastPoo === undefined) {
                 lastPoo = time;
-            } else if (data.diaperType === 'Mixed' && lastMixed === undefined) {
-                lastMixed = time;
             }
         });
 
@@ -1324,15 +1319,8 @@ async function updateLastDiaperTimes(): Promise<void> {
             localStorage.removeItem('lastPooTime');
         }
 
-        if (lastMixed !== undefined) {
-            localStorage.setItem('lastMixedTime', (lastMixed as Date).toISOString());
-        } else {
-            localStorage.removeItem('lastMixedTime');
-        }
-
         updateLastPeeDisplay();
         updateLastPooDisplay();
-        updateLastMixedDisplay();
     } catch (error) {
         console.error('Error fetching last diaper times:', error);
     }
@@ -1385,7 +1373,7 @@ function formatTimeDifference(timeStr: string | null, defaultMessage: string): s
 }
 
 function updateLastBottleDisplay(): void {
-    const displayElement = document.querySelector('.last-bottle-value') as HTMLElement;
+    const displayElement = document.getElementById('last-bottle-value') as HTMLElement;
     if (!displayElement) return;
 
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
@@ -1406,14 +1394,6 @@ function updateLastPooDisplay(): void {
 
     const lastPooTimeStr = localStorage.getItem('lastPooTime');
     displayElement.textContent = formatTimeDifference(lastPooTimeStr, 'No poo recorded');
-}
-
-function updateLastMixedDisplay(): void {
-    const displayElement = document.getElementById('last-mixed-value') as HTMLElement;
-    if (!displayElement) return;
-
-    const lastMixedTimeStr = localStorage.getItem('lastMixedTime');
-    displayElement.textContent = formatTimeDifference(lastMixedTimeStr, 'No mixed recorded');
 }
 
 function updateLastPumpDisplay(): void {
