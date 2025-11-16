@@ -139,16 +139,8 @@ h1 {
 
 .panel {
     border: 2px solid #999;
-    padding: 20px;
+    padding: 10px 20px 20px 20px;
     background-color: #fafafa;
-}
-
-.panel h2 {
-    margin-top: 0;
-    color: #444;
-    border-bottom: none;
-    padding-bottom: 10px;
-    margin-bottom: 0px;
 }
 
 .last-bottle-display {
@@ -175,7 +167,8 @@ h1 {
 
 .vitamin-d-section {
     padding: 0px 0;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    margin-top: 0px;
     border-bottom: none;
 }
 
@@ -575,13 +568,7 @@ button:active {
     }
 
     .panel {
-        padding: 12px;
-    }
-
-    .panel h2 {
-        font-size: 16px;
-        margin-bottom: 0px;
-        border-bottom: none;
+        padding: 5px 12px 12px 12px;
     }
 
     .tab-buttons {
@@ -610,8 +597,10 @@ button:active {
     }
 
     .vitamin-d-section {
-        padding: 3px 0;
+        padding: 0px 0;
         margin-bottom: 8px;
+        margin-top: 0px;
+        border-bottom: none;
     }
 
     .vitamin-d-label {
