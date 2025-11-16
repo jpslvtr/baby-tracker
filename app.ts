@@ -1578,7 +1578,23 @@ function updateLastBottleDisplay(): void {
     if (!displayElement) return;
 
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
-    displayElement.textContent = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
+
+    if (!lastBottleTimeStr) {
+        displayElement.innerHTML = 'No bottles recorded';
+        return;
+    }
+
+    const timeDiff = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
+
+    const lastBottleTime = new Date(lastBottleTimeStr);
+    const targetTime = new Date(lastBottleTime.getTime() + (2.5 * 60 * 60 * 1000));
+    const hours = targetTime.getHours();
+    const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    const displayHours = hours % 12 || 12;
+    const targetTimeStr = `${displayHours}:${minutes} ${ampm}`;
+
+    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(2.5 hours from then: ${targetTimeStr})</span>`;
 }
 
 function updateLastPeeDisplay(): void {
