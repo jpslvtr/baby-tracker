@@ -49,6 +49,7 @@ let lastBottleTimerInterval: number | null = null;
 let lastPeeTimerInterval: number | null = null;
 let lastPooTimerInterval: number | null = null;
 let lastPumpTimerInterval: number | null = null;
+let vitaminDDateCheckInterval: number | null = null;
 
 function getWeekStart(date: Date): Date {
     const d = new Date(date);
@@ -139,6 +140,24 @@ async function loadVitaminDStatus(): Promise<void> {
     }
 }
 
+function scheduleNextMidnightCheck(): void {
+    if (vitaminDDateCheckInterval) {
+        clearTimeout(vitaminDDateCheckInterval);
+    }
+
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+
+    vitaminDDateCheckInterval = window.setTimeout(() => {
+        loadVitaminDStatus();
+        scheduleNextMidnightCheck();
+    }, msUntilMidnight);
+}
+
 async function handleVitaminDChange(event: Event): Promise<void> {
     const checkbox = event.target as HTMLInputElement;
     const statusDiv = document.getElementById('vitamin-d-status') as HTMLDivElement;
@@ -203,6 +222,7 @@ function initializeUI(): void {
     enforceNumericInputs();
     setupUnitConversion();
     loadVitaminDStatus();
+    scheduleNextMidnightCheck();
     window.scrollTo(0, 0);
 }
 
