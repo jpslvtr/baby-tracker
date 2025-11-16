@@ -938,3 +938,30 @@ button:active {
     z-index: 10;
     margin: 0;
 }
+
+.json-content-box {
+    background-color: #f5f5f5;
+    padding: 15px;
+    border: 1px solid #ccc;
+    overflow-x: auto;
+    overflow-y: auto;
+    font-size: 11px;
+    max-height: 400px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.json-content-box::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+}
+
+.json-content-box::-webkit-scrollbar-thumb {
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.json-content-box::-webkit-scrollbar-track {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 5px;
+}
