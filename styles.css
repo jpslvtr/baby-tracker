@@ -942,6 +942,7 @@ button:active {
 .json-content-box {
     background-color: #f5f5f5;
     padding: 15px;
+    padding-bottom: 30px;
     border: 1px solid #ccc;
     overflow-x: auto;
     overflow-y: auto;
