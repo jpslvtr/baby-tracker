@@ -18,6 +18,12 @@ button, select, input, textarea {
     appearance: none;
 }
 
+input[type="checkbox"] {
+    -webkit-appearance: checkbox;
+    -moz-appearance: checkbox;
+    appearance: checkbox;
+}
+
 .passcode-container {
     display: flex;
     justify-content: center;
@@ -142,7 +148,7 @@ h1 {
     color: #444;
     border-bottom: 1px solid #ccc;
     padding-bottom: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 .last-bottle-display {
@@ -165,6 +171,39 @@ h1 {
     color: #4a90e2;
     font-weight: bold;
     font-family: monospace;
+}
+
+.vitamin-d-section {
+    padding: 10px 0;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #ccc;
+}
+
+.vitamin-d-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: normal;
+    color: #333;
+    font-size: 15px;
+}
+
+.vitamin-d-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0 10px 0 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+#vitamin-d-label-text {
+    user-select: none;
+}
+
+#vitamin-d-status {
+    margin-top: 8px;
+    margin-left: 30px;
+    font-size: 13px;
 }
 
 label {
@@ -541,7 +580,7 @@ button:active {
 
     .panel h2 {
         font-size: 16px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
     }
 
     .tab-buttons {
@@ -567,6 +606,26 @@ button:active {
 
     .last-bottle-value {
         font-size: 22px;
+    }
+
+    .vitamin-d-section {
+        padding: 8px 0;
+        margin-bottom: 12px;
+    }
+
+    .vitamin-d-label {
+        font-size: 14px;
+    }
+
+    .vitamin-d-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin-right: 8px;
+    }
+
+    #vitamin-d-status {
+        font-size: 12px;
+        margin-left: 26px;
     }
 
     label {
@@ -835,7 +894,6 @@ button:active {
     }
 }
 
-/* Quick filter buttons styling */
 .quick-filters {
     display: flex;
     gap: 8px;

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit, setDoc, getDoc } from 'firebase/firestore';
 import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './config/secrets';
 import { FIREBASECONFIG } from './config/firebase-config'
 
@@ -101,6 +101,74 @@ function formatDateOnly(date: Date): string {
     return `${days[date.getDay()]}, ${month}/${day}/${year}`;
 }
 
+function getDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+async function loadVitaminDStatus(): Promise<void> {
+    const checkbox = document.getElementById('vitamin-d-checkbox') as HTMLInputElement;
+    const statusDiv = document.getElementById('vitamin-d-status') as HTMLDivElement;
+    const labelText = document.getElementById('vitamin-d-label-text') as HTMLSpanElement;
+
+    if (!checkbox || !statusDiv || !labelText) return;
+
+    const today = new Date();
+    const dateKey = getDateKey(today);
+
+    try {
+        const vitaminDDoc = await getDoc(doc(db, 'vitaminD', dateKey));
+
+        if (vitaminDDoc.exists()) {
+            const data = vitaminDDoc.data();
+            checkbox.checked = data.given === true;
+        } else {
+            checkbox.checked = false;
+        }
+
+        labelText.textContent = checkbox.checked ? 'Vitamin D drop given' : 'Record Vitamin D drop';
+        statusDiv.textContent = '';
+        statusDiv.style.display = 'none';
+    } catch (error) {
+        console.error('Error loading vitamin D status:', error);
+        statusDiv.className = 'error';
+        statusDiv.textContent = 'Failed to load vitamin D status';
+        statusDiv.style.display = 'block';
+    }
+}
+
+async function handleVitaminDChange(event: Event): Promise<void> {
+    const checkbox = event.target as HTMLInputElement;
+    const statusDiv = document.getElementById('vitamin-d-status') as HTMLDivElement;
+    const labelText = document.getElementById('vitamin-d-label-text') as HTMLSpanElement;
+
+    if (!statusDiv || !labelText) return;
+
+    const today = new Date();
+    const dateKey = getDateKey(today);
+
+    try {
+        await setDoc(doc(db, 'vitaminD', dateKey), {
+            given: checkbox.checked,
+            date: Timestamp.fromDate(today)
+        });
+
+        labelText.textContent = checkbox.checked ? 'Vitamin D drop given' : 'Record Vitamin D drop';
+
+        statusDiv.style.display = 'none';
+    } catch (error) {
+        console.error('Error saving vitamin D status:', error);
+        statusDiv.className = 'error';
+        statusDiv.textContent = 'Failed to save vitamin D status';
+        statusDiv.style.display = 'block';
+
+        checkbox.checked = !checkbox.checked;
+        labelText.textContent = checkbox.checked ? 'Vitamin D drop given' : 'Record Vitamin D drop';
+    }
+}
+
 function checkPasscode(): void {
     const passcodeInput = document.getElementById('passcode-input') as HTMLInputElement;
     const passcodeError = document.getElementById('passcode-error') as HTMLDivElement;
@@ -134,6 +202,7 @@ function initializeUI(): void {
     startAllTimers();
     enforceNumericInputs();
     setupUnitConversion();
+    loadVitaminDStatus();
     window.scrollTo(0, 0);
 }
 
@@ -295,6 +364,11 @@ function setupEventListeners(): void {
 
     entryTypeSelect.addEventListener('change', handleEntryTypeChange);
     submitButton.addEventListener('click', handleSubmitEntry);
+
+    const vitaminDCheckbox = document.getElementById('vitamin-d-checkbox') as HTMLInputElement;
+    if (vitaminDCheckbox) {
+        vitaminDCheckbox.addEventListener('change', handleVitaminDChange);
+    }
 
     const entryTab = document.getElementById('entry-tab') as HTMLButtonElement;
     const timelineTab = document.getElementById('timeline-tab') as HTMLButtonElement;
@@ -558,6 +632,7 @@ function switchTab(tab: string): void {
     if (tab === 'entry') {
         document.getElementById('entry-tab')?.classList.add('active');
         (document.getElementById('entry-view') as HTMLElement).style.display = 'block';
+        loadVitaminDStatus();
     } else if (tab === 'timeline') {
         document.getElementById('timeline-tab')?.classList.add('active');
         (document.getElementById('timeline-view') as HTMLElement).style.display = 'block';
@@ -883,6 +958,34 @@ async function loadWeeklyView(): Promise<void> {
         );
         const snapshot = await getDocs(q);
 
+        const vitaminDStartDate = new Date('2025-11-11');
+        vitaminDStartDate.setHours(0, 0, 0, 0);
+
+        const vitaminDMap: { [key: string]: boolean } = {};
+        const dateKeysToCheck: string[] = [];
+
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(currentWeekStart);
+            date.setDate(date.getDate() + i);
+            date.setHours(0, 0, 0, 0);
+
+            if (date >= vitaminDStartDate) {
+                const dateKey = getDateKey(date);
+                dateKeysToCheck.push(dateKey);
+            }
+        }
+
+        if (dateKeysToCheck.length > 0) {
+            const vitaminDDocs = await Promise.all(
+                dateKeysToCheck.map(dateKey => getDoc(doc(db, 'vitaminD', dateKey)))
+            );
+
+            dateKeysToCheck.forEach((dateKey, index) => {
+                const vitaminDDoc = vitaminDDocs[index];
+                vitaminDMap[dateKey] = vitaminDDoc.exists() && vitaminDDoc.data()?.given === true;
+            });
+        }
+
         const dayStats: { [key: string]: any } = {};
 
         for (let i = 0; i < 7; i++) {
@@ -890,9 +993,11 @@ async function loadWeeklyView(): Promise<void> {
             date.setDate(date.getDate() + i);
             date.setHours(0, 0, 0, 0);
             const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+            const dateKeyFormatted = getDateKey(date);
 
             dayStats[dateKey] = {
                 date: new Date(date),
+                vitaminD: date >= vitaminDStartDate ? (vitaminDMap[dateKeyFormatted] === true) : null,
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
                 pumps: { total: 0, sessions: 0 }
@@ -962,8 +1067,21 @@ async function loadWeeklyView(): Promise<void> {
             const totalPee = stats.diapers.pee + stats.diapers.mixed;
             const totalPoo = stats.diapers.poo + stats.diapers.mixed;
 
+            let vitaminDHTML = '';
+            if (stats.vitaminD !== null) {
+                const vitaminDStatus = stats.vitaminD ? 'Yes' : 'No';
+                const vitaminDColor = stats.vitaminD ? '#4caf50' : '#f44336';
+                vitaminDHTML = `
+                    <div class="stat-group">
+                        <div class="stat-group-title">Vitamin D</div>
+                        <div class="stat-line" style="color: ${vitaminDColor}; font-weight: bold;">${vitaminDStatus}</div>
+                    </div>
+                `;
+            }
+
             dayDiv.innerHTML = `
                 <div class="day-stats-header">${dayName}<br>${dateStr}</div>
+                ${vitaminDHTML}
                 <div class="stat-group">
                     <div class="stat-group-title">Bottles</div>
                     <div class="stat-line">Number of feeds: ${stats.bottles.sessions}</div>
