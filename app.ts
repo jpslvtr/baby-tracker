@@ -54,7 +54,9 @@ function getWeekStart(date: Date): Date {
     const d = new Date(date);
     const day = d.getDay();
     const diff = d.getDate() - day;
-    return new Date(d.setDate(diff));
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
 }
 
 function getWeekEnd(weekStart: Date): Date {
@@ -781,13 +783,14 @@ async function loadTimeline(): Promise<void> {
                 }
 
                 if (typeFilter === 'all' || typeFilter === 'diaper') {
+                    const totalPee = summaryStats.diapers.pee + summaryStats.diapers.mixed;
+                    const totalPoo = summaryStats.diapers.poo + summaryStats.diapers.mixed;
+
                     summaryHTML += `
                         <div class="stat-group">
                             <div class="stat-group-title">Diapers</div>
-                            <div class="stat-line">Pee: ${summaryStats.diapers.pee}</div>
-                            <div class="stat-line">Poo: ${summaryStats.diapers.poo}</div>
-                            <div class="stat-line">Mixed: ${summaryStats.diapers.mixed}</div>
-                            <div class="stat-line">Total diapers: ${summaryStats.diapers.total}</div>
+                            <div class="stat-line">Pee: ${totalPee}</div>
+                            <div class="stat-line">Poo: ${totalPoo}</div>
                         </div>
                     `;
                 }
@@ -828,11 +831,9 @@ async function loadWeeklyView(): Promise<void> {
 
     const BIRTH_DATE = new Date('2025-11-05');
     const birthWeekStart = getWeekStart(BIRTH_DATE);
-    birthWeekStart.setHours(0, 0, 0, 0);
 
     const today = new Date();
     const currentWeekStartDate = getWeekStart(today);
-    currentWeekStartDate.setHours(0, 0, 0, 0);
 
     const normalizedCurrentWeekStart = new Date(currentWeekStart);
     normalizedCurrentWeekStart.setHours(0, 0, 0, 0);
@@ -887,20 +888,23 @@ async function loadWeeklyView(): Promise<void> {
         for (let i = 0; i < 7; i++) {
             const date = new Date(currentWeekStart);
             date.setDate(date.getDate() + i);
-            const dateKey = date.toDateString();
+            date.setHours(0, 0, 0, 0);
+            const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 
             dayStats[dateKey] = {
-                date: date,
+                date: new Date(date),
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
                 pumps: { total: 0, sessions: 0 }
             };
         }
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const date = data.startTime.toDate();
-            const dateKey = date.toDateString();
+        snapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            const entryDate = data.startTime.toDate();
+            const normalizedDate = new Date(entryDate);
+            normalizedDate.setHours(0, 0, 0, 0);
+            const dateKey = `${normalizedDate.getFullYear()}-${normalizedDate.getMonth()}-${normalizedDate.getDate()}`;
 
             if (dayStats[dateKey]) {
                 if (data.type === 'Feed') {
@@ -931,7 +935,7 @@ async function loadWeeklyView(): Promise<void> {
             }
         });
 
-        const daysArray = Object.keys(dayStats).map(key => dayStats[key]);
+        const daysArray = Object.keys(dayStats).map(key => dayStats[key]).sort((a, b) => a.date.getTime() - b.date.getTime());
 
         const weeklyContainer = document.createElement('div');
         weeklyContainer.className = 'weekly-scroll-container';
@@ -955,6 +959,9 @@ async function loadWeeklyView(): Promise<void> {
             const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][stats.date.getDay()];
             const dateStr = `${stats.date.getMonth() + 1}/${stats.date.getDate()}`;
 
+            const totalPee = stats.diapers.pee + stats.diapers.mixed;
+            const totalPoo = stats.diapers.poo + stats.diapers.mixed;
+
             dayDiv.innerHTML = `
                 <div class="day-stats-header">${dayName}<br>${dateStr}</div>
                 <div class="stat-group">
@@ -966,10 +973,8 @@ async function loadWeeklyView(): Promise<void> {
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Diapers</div>
-                    <div class="stat-line">Pee: ${stats.diapers.pee}</div>
-                    <div class="stat-line">Poo: ${stats.diapers.poo}</div>
-                    <div class="stat-line">Mixed: ${stats.diapers.mixed}</div>
-                    <div class="stat-line">Total diapers: ${stats.diapers.total}</div>
+                    <div class="stat-line">Pee: ${totalPee}</div>
+                    <div class="stat-line">Poo: ${totalPoo}</div>
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Pumps</div>
