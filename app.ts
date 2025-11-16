@@ -1594,7 +1594,7 @@ function updateLastBottleDisplay(): void {
     const displayHours = hours % 12 || 12;
     const targetTimeStr = `${displayHours}:${minutes} ${ampm}`;
 
-    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(2.5 hours from then: ${targetTimeStr})</span>`;
+    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next feed ~2.5 hrs: ${targetTimeStr})</span>`;
 }
 
 function updateLastPeeDisplay(): void {
