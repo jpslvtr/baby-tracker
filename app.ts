@@ -390,7 +390,15 @@ function setupEventListeners(): void {
         vitaminDCheckbox.addEventListener('change', handleVitaminDChange);
     }
 
+    const refreshButton = document.getElementById('refresh-button') as HTMLButtonElement;
+    if (refreshButton) {
+        refreshButton.addEventListener('click', () => {
+            window.location.reload();
+        });
+    }
+
     const entryTab = document.getElementById('entry-tab') as HTMLButtonElement;
+
     const timelineTab = document.getElementById('timeline-tab') as HTMLButtonElement;
     const weeklyTab = document.getElementById('weekly-tab') as HTMLButtonElement;
 

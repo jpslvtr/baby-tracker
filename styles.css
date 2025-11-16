@@ -966,3 +966,28 @@ button:active {
     background-color: rgba(0, 0, 0, 0.1);
     border-radius: 5px;
 }
+
+#refresh-button {
+    background-color: #ddd;
+    color: #333;
+    border: 2px outset #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#refresh-button:hover {
+    background-color: #ccc;
+}
+
+#refresh-button:active {
+    border: 2px inset #ddd;
+}
+
+@media (max-width: 768px) {
+    #refresh-button {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
+}
