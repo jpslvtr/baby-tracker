@@ -1186,20 +1186,26 @@ async function loadJsonData(): Promise<void> {
         const jsonString = JSON.stringify(entries, null, 2);
         jsonContent.textContent = jsonString;
 
-        toggleButton.addEventListener('click', () => {
+        // Remove old event listeners by cloning and replacing the buttons
+        const newToggleButton = toggleButton.cloneNode(true) as HTMLButtonElement;
+        const newCopyButton = copyButton.cloneNode(true) as HTMLButtonElement;
+        toggleButton.parentNode?.replaceChild(newToggleButton, toggleButton);
+        copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
+
+        newToggleButton.addEventListener('click', () => {
             const isHidden = jsonContent.style.display === 'none';
             jsonContent.style.display = isHidden ? 'block' : 'none';
-            copyButton.style.display = isHidden ? 'block' : 'none';
-            toggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
+            newCopyButton.style.display = isHidden ? 'block' : 'none';
+            newToggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
         });
 
-        copyButton.addEventListener('click', async () => {
+        newCopyButton.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(jsonString);
-                const originalText = copyButton.textContent;
-                copyButton.textContent = '✓';
+                const originalText = newCopyButton.textContent;
+                newCopyButton.textContent = '✓';
                 setTimeout(() => {
-                    copyButton.textContent = originalText;
+                    newCopyButton.textContent = originalText;
                 }, 2000);
             } catch (error) {
                 alert('Failed to copy to clipboard');
