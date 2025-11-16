@@ -1180,9 +1180,24 @@ async function loadJsonData(): Promise<void> {
 
         toggleButton.addEventListener('click', () => {
             const isHidden = jsonContent.style.display === 'none';
+            const scrollIndicator = document.getElementById('json-scroll-indicator') as HTMLDivElement;
+
             jsonContent.style.display = isHidden ? 'block' : 'none';
             copyButton.style.display = isHidden ? 'block' : 'none';
             toggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
+
+            if (isHidden && scrollIndicator) {
+                scrollIndicator.style.display = 'block';
+
+                jsonContent.addEventListener('scroll', () => {
+                    const isAtBottom = jsonContent.scrollHeight - jsonContent.scrollTop <= jsonContent.clientHeight + 50;
+                    if (isAtBottom) {
+                        scrollIndicator.style.display = 'none';
+                    }
+                });
+            } else if (scrollIndicator) {
+                scrollIndicator.style.display = 'none';
+            }
         });
 
         copyButton.addEventListener('click', async () => {
