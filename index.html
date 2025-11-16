@@ -233,9 +233,17 @@
                 <button id="current-week" class="current-week-button">Current Week</button>
                 <div id="weekly-loading">Loading...</div>
                 <div id="weekly-stats"></div>
+                
+                <div id="json-data" style="margin-top: 20px;">
+                    <button id="toggle-json" class="current-week-button">Show JSON Data</button>
+                    <div style="position: relative;">
+                        <button id="copy-json" class="copy-json-button" style="display: none;" title="Copy to clipboard">📋</button>
+                        <pre id="json-content"
+                            style="display: none; background-color: #f5f5f5; padding: 15px; border: 1px solid #ccc; overflow-x: auto; font-size: 11px; max-height: 400px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
             </div>
         </div>
-
         <div class="footer">
             © 2025 James Park
         </div>

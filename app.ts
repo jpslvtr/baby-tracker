@@ -1145,6 +1145,60 @@ async function loadWeeklyView(): Promise<void> {
         weeklyStats.innerHTML = '<p class="error">Failed to load weekly view</p>';
     } finally {
         loadingDiv.style.display = 'none';
+        await loadJsonData();
+    }
+}
+
+async function loadJsonData(): Promise<void> {
+    const jsonContent = document.getElementById('json-content') as HTMLPreElement;
+    const toggleButton = document.getElementById('toggle-json') as HTMLButtonElement;
+    const copyButton = document.getElementById('copy-json') as HTMLButtonElement;
+
+    if (!jsonContent || !toggleButton || !copyButton) return;
+
+    try {
+        const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
+        const snapshot = await getDocs(q);
+
+        const entries = snapshot.docs.map(docSnapshot => {
+            const data = docSnapshot.data();
+            return {
+                id: docSnapshot.id,
+                type: data.type,
+                subType: data.subType || null,
+                startTime: data.startTime.toDate().toISOString(),
+                endTime: data.endTime ? data.endTime.toDate().toISOString() : null,
+                amount: data.amount || null,
+                unit: data.unit || null,
+                diaperType: data.diaperType || null,
+                notes: data.notes || ''
+            };
+        });
+
+        const jsonString = JSON.stringify(entries, null, 2);
+        jsonContent.textContent = jsonString;
+
+        toggleButton.addEventListener('click', () => {
+            const isHidden = jsonContent.style.display === 'none';
+            jsonContent.style.display = isHidden ? 'block' : 'none';
+            copyButton.style.display = isHidden ? 'block' : 'none';
+            toggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
+        });
+
+        copyButton.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(jsonString);
+                const originalText = copyButton.textContent;
+                copyButton.textContent = '✓';
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                }, 2000);
+            } catch (error) {
+                alert('Failed to copy to clipboard');
+            }
+        });
+    } catch (error) {
+        jsonContent.textContent = 'Failed to load data';
     }
 }
 
