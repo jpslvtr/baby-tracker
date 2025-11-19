@@ -365,10 +365,6 @@ function attachTimeValidation(inputId: string): void {
     const input = document.getElementById(inputId) as HTMLInputElement;
     if (!input) return;
 
-    if (inputId === 'pump-end-time' || inputId === 'edit-pump-end-time') {
-        return;
-    }
-
     input.addEventListener('blur', () => {
         validateTime(input);
     });
@@ -443,11 +439,9 @@ function setupEventListeners(): void {
     attachTimeValidation('bottle-time');
     attachTimeValidation('diaper-time');
     attachTimeValidation('pump-start-time');
-    attachTimeValidation('pump-end-time');
     attachTimeValidation('edit-bottle-time');
     attachTimeValidation('edit-diaper-time');
     attachTimeValidation('edit-pump-start-time');
-    attachTimeValidation('edit-pump-end-time');
 }
 
 function setDefaultTimes(): void {
@@ -457,7 +451,6 @@ function setDefaultTimes(): void {
     const bottleTime = document.getElementById('bottle-time') as HTMLInputElement | null;
     const diaperTime = document.getElementById('diaper-time') as HTMLInputElement | null;
     const pumpStartTime = document.getElementById('pump-start-time') as HTMLInputElement | null;
-    const pumpEndTime = document.getElementById('pump-end-time') as HTMLInputElement | null;
 
     if (bottleTime) {
         bottleTime.value = formatted;
@@ -467,9 +460,6 @@ function setDefaultTimes(): void {
     }
     if (pumpStartTime) {
         pumpStartTime.value = formatted;
-    }
-    if (pumpEndTime) {
-        pumpEndTime.value = formatted;
     }
 }
 
@@ -569,9 +559,7 @@ async function handleSubmitEntry(): Promise<void> {
             };
         } else if (entryType === 'pump') {
             const startTimeInput = document.getElementById('pump-start-time') as HTMLInputElement;
-            const endTimeInput = document.getElementById('pump-end-time') as HTMLInputElement;
             const startTime = startTimeInput.value;
-            const endTime = endTimeInput.value;
             const amount = parseFloat((document.getElementById('pump-amount') as HTMLInputElement).value);
             const unit = (document.getElementById('pump-unit') as HTMLSelectElement).value;
             const notes = (document.getElementById('pump-notes') as HTMLTextAreaElement).value;
@@ -579,17 +567,10 @@ async function handleSubmitEntry(): Promise<void> {
             if (!startTime) {
                 throw new Error('Start time is required');
             }
-            if (!endTime) {
-                throw new Error('End time is required');
-            }
 
             const selectedStartTime = new Date(startTimeInput.value);
-            const selectedEndTime = new Date(endTimeInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot add entries in the future');
-            }
-            if (selectedEndTime < selectedStartTime) {
-                throw new Error('End time must be after start time');
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
@@ -598,7 +579,6 @@ async function handleSubmitEntry(): Promise<void> {
             entry = {
                 type: 'Pump',
                 startTime: selectedStartTime,
-                endTime: selectedEndTime,
                 amount: amount,
                 unit: unit,
                 notes: notes
@@ -833,9 +813,7 @@ async function loadTimeline(): Promise<void> {
                     detailsHTML = `<div class="timeline-entry-details">Type: ${data.diaperType}</div>`;
                     backgroundColor = '#fce2d4';
                 } else if (data.type === 'Pump') {
-                    const endTime = data.endTime ? data.endTime.toDate() : null;
-                    const duration = endTime ? Math.round((endTime.getTime() - startTime.getTime()) / 60000) : 0;
-                    detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}<br>Duration: ${duration} minutes</div>`;
+                    detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}</div>`;
                     backgroundColor = '#e2daf2';
                 }
 
@@ -1301,9 +1279,7 @@ function openEditModal(docId: string, data: any): void {
         editPumpFields.style.display = 'block';
         const editPumpUnit = document.getElementById('edit-pump-unit') as HTMLSelectElement;
         const editPumpAmount = document.getElementById('edit-pump-amount') as HTMLInputElement;
-        const endTime = data.endTime ? data.endTime.toDate() : startTime;
         (document.getElementById('edit-pump-start-time') as HTMLInputElement).value = formatDateTime(startTime);
-        (document.getElementById('edit-pump-end-time') as HTMLInputElement).value = formatDateTime(endTime);
         editPumpAmount.value = data.amount.toFixed(2);
         editPumpUnit.value = data.unit || 'oz';
         editPumpAmount.dataset.lastUnit = data.unit || 'oz';
@@ -1385,9 +1361,7 @@ async function saveEdit(): Promise<void> {
             };
         } else if (editPumpFields.style.display === 'block') {
             const startTimeInput = document.getElementById('edit-pump-start-time') as HTMLInputElement;
-            const endTimeInput = document.getElementById('edit-pump-end-time') as HTMLInputElement;
             const startTime = startTimeInput.value;
-            const endTime = endTimeInput.value;
             const amount = parseFloat((document.getElementById('edit-pump-amount') as HTMLInputElement).value);
             const unit = (document.getElementById('edit-pump-unit') as HTMLSelectElement).value;
             const notes = (document.getElementById('edit-pump-notes') as HTMLTextAreaElement).value;
@@ -1395,17 +1369,10 @@ async function saveEdit(): Promise<void> {
             if (!startTime) {
                 throw new Error('Start time is required');
             }
-            if (!endTime) {
-                throw new Error('End time is required');
-            }
 
             const selectedStartTime = new Date(startTimeInput.value);
-            const selectedEndTime = new Date(endTimeInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot set time in the future');
-            }
-            if (selectedEndTime < selectedStartTime) {
-                throw new Error('End time must be after start time');
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
@@ -1413,7 +1380,6 @@ async function saveEdit(): Promise<void> {
 
             updateData = {
                 startTime: Timestamp.fromDate(selectedStartTime),
-                endTime: Timestamp.fromDate(selectedEndTime),
                 amount: amount,
                 unit: unit,
                 notes: notes
