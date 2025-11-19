@@ -421,19 +421,21 @@ function setupEventListeners(): void {
     const startDateFilter = document.getElementById('start-date-filter') as HTMLInputElement;
     const endDateFilter = document.getElementById('end-date-filter') as HTMLInputElement;
     const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
+    
     const todayButton = document.getElementById('today-button') as HTMLButtonElement;
-    const last48Button = document.getElementById('last-48-button') as HTMLButtonElement;
-    const last72Button = document.getElementById('last-72-button') as HTMLButtonElement;
-    const lastWeekButton = document.getElementById('last-week-button') as HTMLButtonElement;
+    const yesterdayButton = document.getElementById('yesterday-button') as HTMLButtonElement;
+    const twoDaysAgoButton = document.getElementById('two-days-ago-button') as HTMLButtonElement;
+    const threeDaysAgoButton = document.getElementById('three-days-ago-button') as HTMLButtonElement;
     const allTimeButton = document.getElementById('all-time-button') as HTMLButtonElement;
 
     startDateFilter.addEventListener('change', () => loadTimeline());
     endDateFilter.addEventListener('change', () => loadTimeline());
     typeFilter.addEventListener('change', () => loadTimeline());
+    
     todayButton.addEventListener('click', () => handleQuickFilter('today'));
-    last48Button.addEventListener('click', () => handleQuickFilter('last-48'));
-    last72Button.addEventListener('click', () => handleQuickFilter('last-72'));
-    lastWeekButton.addEventListener('click', () => handleQuickFilter('last-week'));
+    yesterdayButton.addEventListener('click', () => handleQuickFilter('yesterday'));
+    twoDaysAgoButton.addEventListener('click', () => handleQuickFilter('two-days-ago'));
+    threeDaysAgoButton.addEventListener('click', () => handleQuickFilter('three-days-ago'));
     allTimeButton.addEventListener('click', () => handleQuickFilter('all-time'));
 
     attachTimeValidation('bottle-time');
@@ -666,21 +668,21 @@ function handleQuickFilter(filterType: string): void {
     } else if (filterType === 'today') {
         startDateInput.value = formatDateForInput(today);
         endDateInput.value = formatDateForInput(today);
-    } else if (filterType === 'last-48') {
+    } else if (filterType === 'yesterday') {
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
         startDateInput.value = formatDateForInput(yesterday);
-        endDateInput.value = formatDateForInput(today);
-    } else if (filterType === 'last-72') {
+        endDateInput.value = formatDateForInput(yesterday);
+    } else if (filterType === 'two-days-ago') {
         const twoDaysAgo = new Date(today);
         twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
         startDateInput.value = formatDateForInput(twoDaysAgo);
-        endDateInput.value = formatDateForInput(today);
-    } else if (filterType === 'last-week') {
-        const sixDaysAgo = new Date(today);
-        sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
-        startDateInput.value = formatDateForInput(sixDaysAgo);
-        endDateInput.value = formatDateForInput(today);
+        endDateInput.value = formatDateForInput(twoDaysAgo);
+    } else if (filterType === 'three-days-ago') {
+        const threeDaysAgo = new Date(today);
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+        startDateInput.value = formatDateForInput(threeDaysAgo);
+        endDateInput.value = formatDateForInput(threeDaysAgo);
     }
 
     loadTimeline();
@@ -1567,14 +1569,18 @@ function updateLastBottleDisplay(): void {
     const timeDiff = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
 
     const lastBottleTime = new Date(lastBottleTimeStr);
-    const targetTime = new Date(lastBottleTime.getTime() + (2.5 * 60 * 60 * 1000));
-    const hours = targetTime.getHours();
-    const minutes = String(targetTime.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const displayHours = hours % 12 || 12;
-    const targetTimeStr = `${displayHours}:${minutes} ${ampm}`;
+    const projectedTimes: string[] = [];
 
-    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next feed ~2.5 hrs: ${targetTimeStr})</span>`;
+    for (let i = 1; i <= 3; i++) {
+        const targetTime = new Date(lastBottleTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
+        const hours = targetTime.getHours();
+        const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        const displayHours = hours % 12 || 12;
+        projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+    }
+
+    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next feeds: ${projectedTimes.join(', ')})</span>`;
 }
 
 function updateLastPeeDisplay(): void {
@@ -1598,7 +1604,27 @@ function updateLastPumpDisplay(): void {
     if (!displayElement) return;
 
     const lastPumpTimeStr = localStorage.getItem('lastPumpTime');
-    displayElement.textContent = formatTimeDifference(lastPumpTimeStr, 'No pumps recorded');
+
+    if (!lastPumpTimeStr) {
+        displayElement.innerHTML = 'No pumps recorded';
+        return;
+    }
+
+    const timeDiff = formatTimeDifference(lastPumpTimeStr, 'No pumps recorded');
+
+    const lastPumpTime = new Date(lastPumpTimeStr);
+    const projectedTimes: string[] = [];
+
+    for (let i = 1; i <= 3; i++) {
+        const targetTime = new Date(lastPumpTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
+        const hours = targetTime.getHours();
+        const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        const displayHours = hours % 12 || 12;
+        projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+    }
+
+    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next pumps: ${projectedTimes.join(', ')})</span>`;
 }
 
 document.getElementById('passcode-submit')?.addEventListener('click', checkPasscode);
