@@ -1569,15 +1569,35 @@ function updateLastBottleDisplay(): void {
     const timeDiff = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
 
     const lastBottleTime = new Date(lastBottleTimeStr);
+    const now = new Date();
+    const msSinceLastBottle = now.getTime() - lastBottleTime.getTime();
+    const hoursSinceLastBottle = msSinceLastBottle / (1000 * 60 * 60);
+
     const projectedTimes: string[] = [];
 
-    for (let i = 1; i <= 3; i++) {
-        const targetTime = new Date(lastBottleTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
-        const hours = targetTime.getHours();
-        const minutes = String(targetTime.getMinutes()).padStart(2, '0');
-        const ampm = hours >= 12 ? 'pm' : 'am';
-        const displayHours = hours % 12 || 12;
-        projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+    // If we're past 2.5 hours, show "in the next minute" as the first projected time
+    if (hoursSinceLastBottle > 2.5) {
+        projectedTimes.push('in the next minute');
+
+        // Calculate subsequent times from "now" (the projected next feed time)
+        for (let i = 1; i <= 2; i++) {
+            const targetTime = new Date(now.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const hours = targetTime.getHours();
+            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            const displayHours = hours % 12 || 12;
+            projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+        }
+    } else {
+        // Normal behavior - show all three projected times from last bottle
+        for (let i = 1; i <= 3; i++) {
+            const targetTime = new Date(lastBottleTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const hours = targetTime.getHours();
+            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            const displayHours = hours % 12 || 12;
+            projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+        }
     }
 
     displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next feeds: ${projectedTimes.join(', ')})</span>`;
@@ -1613,15 +1633,35 @@ function updateLastPumpDisplay(): void {
     const timeDiff = formatTimeDifference(lastPumpTimeStr, 'No pumps recorded');
 
     const lastPumpTime = new Date(lastPumpTimeStr);
+    const now = new Date();
+    const msSinceLastPump = now.getTime() - lastPumpTime.getTime();
+    const hoursSinceLastPump = msSinceLastPump / (1000 * 60 * 60);
+
     const projectedTimes: string[] = [];
 
-    for (let i = 1; i <= 3; i++) {
-        const targetTime = new Date(lastPumpTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
-        const hours = targetTime.getHours();
-        const minutes = String(targetTime.getMinutes()).padStart(2, '0');
-        const ampm = hours >= 12 ? 'pm' : 'am';
-        const displayHours = hours % 12 || 12;
-        projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+    // If we're past 2.5 hours, show "in the next minute" as the first projected time
+    if (hoursSinceLastPump > 2.5) {
+        projectedTimes.push('in the next minute');
+
+        // Calculate subsequent times from "now" (the projected next pump time)
+        for (let i = 1; i <= 2; i++) {
+            const targetTime = new Date(now.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const hours = targetTime.getHours();
+            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            const displayHours = hours % 12 || 12;
+            projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+        }
+    } else {
+        // Normal behavior - show all three projected times from last pump
+        for (let i = 1; i <= 3; i++) {
+            const targetTime = new Date(lastPumpTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const hours = targetTime.getHours();
+            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            const displayHours = hours % 12 || 12;
+            projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
+        }
     }
 
     displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next pumps: ${projectedTimes.join(', ')})</span>`;
