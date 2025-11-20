@@ -1639,13 +1639,13 @@ function updateLastPumpDisplay(): void {
 
     const projectedTimes: string[] = [];
 
-    // If we're past 2.5 hours, show "in the next minute" as the first projected time
-    if (hoursSinceLastPump > 2.5) {
+    // If we're past 4 hours, show "in the next minute" as the first projected time
+    if (hoursSinceLastPump > 4) {
         projectedTimes.push('in the next minute');
 
         // Calculate subsequent times from "now" (the projected next pump time)
         for (let i = 1; i <= 2; i++) {
-            const targetTime = new Date(now.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const targetTime = new Date(now.getTime() + (i * 4 * 60 * 60 * 1000));
             const hours = targetTime.getHours();
             const minutes = String(targetTime.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
@@ -1655,7 +1655,7 @@ function updateLastPumpDisplay(): void {
     } else {
         // Normal behavior - show all three projected times from last pump
         for (let i = 1; i <= 3; i++) {
-            const targetTime = new Date(lastPumpTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const targetTime = new Date(lastPumpTime.getTime() + (i * 4 * 60 * 60 * 1000));
             const hours = targetTime.getHours();
             const minutes = String(targetTime.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
