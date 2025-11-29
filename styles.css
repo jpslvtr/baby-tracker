@@ -998,25 +998,3 @@ button:active {
     font-size: 14px;
 }
 
-.notes-with-type-container {
-    position: relative;
-}
-
-.notes-type-overlay {
-    position: absolute;
-    top: 11px;
-    left: 11px;
-    font-family: monospace;
-    font-size: 14px;
-    font-style: italic;
-    color: #666;
-    pointer-events: none;
-    z-index: 1;
-    white-space: nowrap;
-}
-
-#bottle-notes,
-#edit-bottle-notes {
-    position: relative;
-    background: transparent;
-}

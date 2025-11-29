@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Baby Tracker">
     <title>Baby Tracker</title>
-  <script type="module" crossorigin src="/baby-tracker/assets/main-C4bcPks7.js"></script>
-  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-DfTZq1Yq.css">
+  <script type="module" crossorigin src="/baby-tracker/assets/main-BIs2scSX.js"></script>
+  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-CypDVCuO.css">
 </head>
 
 <body>
@@ -95,10 +95,10 @@
                     </div>
                     
                     <label>Notes:</label>
-                    <div class="notes-with-type-container">
-                        <div id="bottle-notes-overlay" class="notes-type-overlay" style="display: none;"></div>
-                        <textarea id="bottle-notes" placeholder="Optional notes..."></textarea>
-                    </div>
+                    <div id="bottle-type-indicator"
+                        style="display: none; font-style: italic; color: #666; font-size: 12px; margin-bottom: 5px; background-color: #f0f0f0; padding: 5px; border-left: 3px solid #4a90e2;">
+                        Type: <span id="bottle-type-text"></span></div>
+                    <textarea id="bottle-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
                 <div id="diaper-fields" class="entry-fields" style="display: none;">
@@ -198,10 +198,10 @@
                     </div>
                 
                     <label>Notes:</label>
-                    <div class="notes-with-type-container">
-                        <div id="edit-bottle-notes-overlay" class="notes-type-overlay" style="display: none;"></div>
-                        <textarea id="edit-bottle-notes" placeholder="Optional notes..."></textarea>
-                    </div>
+                    <div id="edit-bottle-type-indicator"
+                        style="display: none; font-style: italic; color: #666; font-size: 12px; margin-bottom: 5px; background-color: #f0f0f0; padding: 5px; border-left: 3px solid #4a90e2;">
+                        Type: <span id="edit-bottle-type-text"></span></div>
+                    <textarea id="edit-bottle-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
                 <div id="edit-diaper-fields" style="display: none;">

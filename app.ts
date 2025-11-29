@@ -525,23 +525,21 @@ function handleBottleTypeChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     const selectedType = select.value;
     const notesTextarea = document.getElementById('bottle-notes') as HTMLTextAreaElement;
-    const overlay = document.getElementById('bottle-notes-overlay') as HTMLDivElement;
+    const indicator = document.getElementById('bottle-type-indicator') as HTMLDivElement;
+    const typeText = document.getElementById('bottle-type-text') as HTMLSpanElement;
 
     if (!notesTextarea) return;
 
     const currentNotes = notesTextarea.value;
     const lines = currentNotes.split('\n');
 
-    // Check if first line is a formula type (Bobbie or Enfamil)
     const firstLineIsType = lines.length > 0 && (lines[0] === 'Bobbie' || lines[0] === 'Enfamil');
 
     if (selectedType) {
         if (firstLineIsType) {
-            // Replace the first line with the new type, keep the rest
             lines[0] = selectedType;
             notesTextarea.value = lines.join('\n');
         } else {
-            // Add the type as the first line
             if (currentNotes.trim()) {
                 notesTextarea.value = `${selectedType}\n${currentNotes}`;
             } else {
@@ -549,15 +547,13 @@ function handleBottleTypeChange(event: Event): void {
             }
         }
 
-        // Show overlay
-        if (overlay) {
-            overlay.textContent = selectedType;
-            overlay.style.display = 'block';
+        if (indicator && typeText) {
+            typeText.textContent = selectedType;
+            indicator.style.display = 'block';
         }
     } else {
-        // Hide overlay if no type selected
-        if (overlay) {
-            overlay.style.display = 'none';
+        if (indicator) {
+            indicator.style.display = 'none';
         }
     }
 }
@@ -566,23 +562,22 @@ function handleEditBottleTypeChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     const selectedType = select.value;
     const notesTextarea = document.getElementById('edit-bottle-notes') as HTMLTextAreaElement;
-    const overlay = document.getElementById('edit-bottle-notes-overlay') as HTMLDivElement;
+
+    const indicator = document.getElementById('edit-bottle-type-indicator') as HTMLDivElement;
+    const typeText = document.getElementById('edit-bottle-type-text') as HTMLSpanElement;
 
     if (!notesTextarea) return;
 
     const currentNotes = notesTextarea.value;
     const lines = currentNotes.split('\n');
 
-    // Check if first line is a formula type (Bobbie or Enfamil)
     const firstLineIsType = lines.length > 0 && (lines[0] === 'Bobbie' || lines[0] === 'Enfamil');
 
     if (selectedType) {
         if (firstLineIsType) {
-            // Replace the first line with the new type, keep the rest
             lines[0] = selectedType;
             notesTextarea.value = lines.join('\n');
         } else {
-            // Add the type as the first line
             if (currentNotes.trim()) {
                 notesTextarea.value = `${selectedType}\n${currentNotes}`;
             } else {
@@ -590,15 +585,13 @@ function handleEditBottleTypeChange(event: Event): void {
             }
         }
 
-        // Show overlay
-        if (overlay) {
-            overlay.textContent = selectedType;
-            overlay.style.display = 'block';
+        if (indicator && typeText) {
+            typeText.textContent = selectedType;
+            indicator.style.display = 'block';
         }
     } else {
-        // Hide overlay if no type selected
-        if (overlay) {
-            overlay.style.display = 'none';
+        if (indicator) {
+            indicator.style.display = 'none';
         }
     }
 }
@@ -1585,7 +1578,9 @@ function openEditModal(docId: string, data: any): void {
         (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value = data.notes || '';
 
         // Show type selector only for Formula
-        const editOverlay = document.getElementById('edit-bottle-notes-overlay') as HTMLDivElement;
+        const indicator = document.getElementById('edit-bottle-type-indicator') as HTMLDivElement;
+        const typeText = document.getElementById('edit-bottle-type-text') as HTMLSpanElement;
+
         if (data.subType === 'Formula') {
             editBottleTypeContainer.style.display = 'block';
 
@@ -1594,21 +1589,21 @@ function openEditModal(docId: string, data: any): void {
             const firstLine = notes.split('\n')[0];
             if (firstLine === 'Bobbie' || firstLine === 'Enfamil') {
                 editBottleTypeSelect.value = firstLine;
-                if (editOverlay) {
-                    editOverlay.textContent = firstLine;
-                    editOverlay.style.display = 'block';
+                if (indicator && typeText) {
+                    typeText.textContent = firstLine;
+                    indicator.style.display = 'block';
                 }
             } else {
                 editBottleTypeSelect.value = '';
-                if (editOverlay) {
-                    editOverlay.style.display = 'none';
+                if (indicator) {
+                    indicator.style.display = 'none';
                 }
             }
         } else {
             editBottleTypeContainer.style.display = 'none';
             editBottleTypeSelect.value = '';
-            if (editOverlay) {
-                editOverlay.style.display = 'none';
+            if (indicator) {
+                indicator.style.display = 'none';
             }
         }
     } else if (data.type === 'Diaper') {
