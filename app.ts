@@ -525,6 +525,7 @@ function handleBottleTypeChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     const selectedType = select.value;
     const notesTextarea = document.getElementById('bottle-notes') as HTMLTextAreaElement;
+    const overlay = document.getElementById('bottle-notes-overlay') as HTMLDivElement;
 
     if (!notesTextarea) return;
 
@@ -547,6 +548,17 @@ function handleBottleTypeChange(event: Event): void {
                 notesTextarea.value = selectedType + '\n';
             }
         }
+
+        // Show overlay
+        if (overlay) {
+            overlay.textContent = selectedType;
+            overlay.style.display = 'block';
+        }
+    } else {
+        // Hide overlay if no type selected
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
     }
 }
 
@@ -554,6 +566,7 @@ function handleEditBottleTypeChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     const selectedType = select.value;
     const notesTextarea = document.getElementById('edit-bottle-notes') as HTMLTextAreaElement;
+    const overlay = document.getElementById('edit-bottle-notes-overlay') as HTMLDivElement;
 
     if (!notesTextarea) return;
 
@@ -575,6 +588,17 @@ function handleEditBottleTypeChange(event: Event): void {
             } else {
                 notesTextarea.value = selectedType + '\n';
             }
+        }
+
+        // Show overlay
+        if (overlay) {
+            overlay.textContent = selectedType;
+            overlay.style.display = 'block';
+        }
+    } else {
+        // Hide overlay if no type selected
+        if (overlay) {
+            overlay.style.display = 'none';
         }
     }
 }
@@ -1561,6 +1585,7 @@ function openEditModal(docId: string, data: any): void {
         (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value = data.notes || '';
 
         // Show type selector only for Formula
+        const editOverlay = document.getElementById('edit-bottle-notes-overlay') as HTMLDivElement;
         if (data.subType === 'Formula') {
             editBottleTypeContainer.style.display = 'block';
 
@@ -1569,12 +1594,22 @@ function openEditModal(docId: string, data: any): void {
             const firstLine = notes.split('\n')[0];
             if (firstLine === 'Bobbie' || firstLine === 'Enfamil') {
                 editBottleTypeSelect.value = firstLine;
+                if (editOverlay) {
+                    editOverlay.textContent = firstLine;
+                    editOverlay.style.display = 'block';
+                }
             } else {
                 editBottleTypeSelect.value = '';
+                if (editOverlay) {
+                    editOverlay.style.display = 'none';
+                }
             }
         } else {
             editBottleTypeContainer.style.display = 'none';
             editBottleTypeSelect.value = '';
+            if (editOverlay) {
+                editOverlay.style.display = 'none';
+            }
         }
     } else if (data.type === 'Diaper') {
         editDiaperFields.style.display = 'block';
