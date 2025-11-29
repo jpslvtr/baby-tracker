@@ -991,3 +991,15 @@ button:active {
         font-size: 18px;
     }
 }
+
+#bottle-notes,
+#edit-bottle-notes {
+    font-family: monospace;
+    font-size: 14px;
+}
+
+#bottle-notes::first-line,
+#edit-bottle-notes::first-line {
+    font-style: italic;
+    color: #666;
+}

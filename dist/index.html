@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Baby Tracker">
     <title>Baby Tracker</title>
-  <script type="module" crossorigin src="/baby-tracker/assets/main-YimqCUDq.js"></script>
-  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-BVnHCChY.css">
+  <script type="module" crossorigin src="/baby-tracker/assets/main-DLVfXuej.js"></script>
+  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-9IpGh8zW.css">
 </head>
 
 <body>
@@ -84,7 +84,16 @@
                             <option value="ml">ml</option>
                         </select>
                     </div>
-
+                    
+                    <div id="bottle-type-container" style="display: none;">
+                        <label>Type:</label>
+                        <select id="bottle-type">
+                            <option value="">Select type...</option>
+                            <option value="Bobbie">Bobbie</option>
+                            <option value="Enfamil">Enfamil</option>
+                        </select>
+                    </div>
+                    
                     <label>Notes:</label>
                     <textarea id="bottle-notes" placeholder="Optional notes..."></textarea>
                 </div>
@@ -166,7 +175,7 @@
                 <div id="edit-bottle-fields" style="display: none;">
                     <label>Start Time:</label>
                     <input type="datetime-local" id="edit-bottle-time">
-
+                
                     <label>Amount:</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="number" step="0.01" id="edit-bottle-amount" placeholder="0.00" style="flex: 1;">
@@ -175,7 +184,16 @@
                             <option value="ml">ml</option>
                         </select>
                     </div>
-
+                
+                    <div id="edit-bottle-type-container" style="display: none;">
+                        <label>Type:</label>
+                        <select id="edit-bottle-type">
+                            <option value="">Select type...</option>
+                            <option value="Bobbie">Bobbie</option>
+                            <option value="Enfamil">Enfamil</option>
+                        </select>
+                    </div>
+                
                     <label>Notes:</label>
                     <textarea id="edit-bottle-notes" placeholder="Optional notes..."></textarea>
                 </div>

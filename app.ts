@@ -379,6 +379,21 @@ function setupEventListeners(): void {
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
 
     entryTypeSelect.addEventListener('change', handleEntryTypeChange);
+
+    const bottleTypeSelect = document.getElementById('bottle-type') as HTMLSelectElement;
+    if (bottleTypeSelect) {
+        bottleTypeSelect.addEventListener('change', handleBottleTypeChange);
+    }
+
+    protectBottleNotesFirstLine();
+
+    const editBottleTypeSelect = document.getElementById('edit-bottle-type') as HTMLSelectElement;
+    if (editBottleTypeSelect) {
+        editBottleTypeSelect.addEventListener('change', handleEditBottleTypeChange);
+    }
+
+    protectEditBottleNotesFirstLine();
+
     submitButton.addEventListener('click', handleSubmitEntry);
 
     const vitaminDCheckbox = document.getElementById('vitamin-d-checkbox') as HTMLInputElement;
@@ -473,10 +488,12 @@ function handleEntryTypeChange(event: Event): void {
     const diaperFields = document.getElementById('diaper-fields') as HTMLElement;
     const pumpFields = document.getElementById('pump-fields') as HTMLElement;
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
+    const bottleTypeContainer = document.getElementById('bottle-type-container') as HTMLElement;
 
     bottleFields.style.display = 'none';
     diaperFields.style.display = 'none';
     pumpFields.style.display = 'none';
+    bottleTypeContainer.style.display = 'none';
 
     if (value === 'bottle-breast-milk' || value === 'bottle-formula') {
         bottleFields.style.display = 'block';
@@ -484,6 +501,10 @@ function handleEntryTypeChange(event: Event): void {
         const bottleUnit = document.getElementById('bottle-unit') as HTMLSelectElement;
         const bottleAmount = document.getElementById('bottle-amount') as HTMLInputElement;
         bottleAmount.dataset.lastUnit = bottleUnit.value;
+
+        if (value === 'bottle-formula') {
+            bottleTypeContainer.style.display = 'block';
+        }
     } else if (value === 'diaper') {
         diaperFields.style.display = 'block';
         submitButton.style.display = 'block';
@@ -498,6 +519,260 @@ function handleEntryTypeChange(event: Event): void {
     }
 
     setDefaultTimes();
+}
+
+function handleBottleTypeChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const selectedType = select.value;
+    const notesTextarea = document.getElementById('bottle-notes') as HTMLTextAreaElement;
+
+    if (!notesTextarea) return;
+
+    const currentNotes = notesTextarea.value;
+    const lines = currentNotes.split('\n');
+
+    // Check if first line is a formula type (Bobbie or Enfamil)
+    const firstLineIsType = lines.length > 0 && (lines[0] === 'Bobbie' || lines[0] === 'Enfamil');
+
+    if (selectedType) {
+        if (firstLineIsType) {
+            // Replace the first line with the new type, keep the rest
+            lines[0] = selectedType;
+            notesTextarea.value = lines.join('\n');
+        } else {
+            // Add the type as the first line
+            if (currentNotes.trim()) {
+                notesTextarea.value = `${selectedType}\n${currentNotes}`;
+            } else {
+                notesTextarea.value = selectedType + '\n';
+            }
+        }
+    }
+}
+
+function handleEditBottleTypeChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const selectedType = select.value;
+    const notesTextarea = document.getElementById('edit-bottle-notes') as HTMLTextAreaElement;
+
+    if (!notesTextarea) return;
+
+    const currentNotes = notesTextarea.value;
+    const lines = currentNotes.split('\n');
+
+    // Check if first line is a formula type (Bobbie or Enfamil)
+    const firstLineIsType = lines.length > 0 && (lines[0] === 'Bobbie' || lines[0] === 'Enfamil');
+
+    if (selectedType) {
+        if (firstLineIsType) {
+            // Replace the first line with the new type, keep the rest
+            lines[0] = selectedType;
+            notesTextarea.value = lines.join('\n');
+        } else {
+            // Add the type as the first line
+            if (currentNotes.trim()) {
+                notesTextarea.value = `${selectedType}\n${currentNotes}`;
+            } else {
+                notesTextarea.value = selectedType + '\n';
+            }
+        }
+    }
+}
+
+function protectBottleNotesFirstLine(): void {
+    const notesTextarea = document.getElementById('bottle-notes') as HTMLTextAreaElement;
+    const bottleTypeSelect = document.getElementById('bottle-type') as HTMLSelectElement;
+
+    if (!notesTextarea || !bottleTypeSelect) return;
+
+    notesTextarea.addEventListener('input', () => {
+        const selectedType = bottleTypeSelect.value;
+        if (!selectedType) return;
+
+        const currentValue = notesTextarea.value;
+        const lines = currentValue.split('\n');
+
+        // If first line has been modified or removed, restore it
+        if (lines.length === 0 || (lines[0] !== selectedType && lines[0] !== '')) {
+            // User tried to modify the first line, restore it
+            if (lines.length === 0) {
+                notesTextarea.value = selectedType + '\n';
+            } else if (lines[0] !== selectedType) {
+                lines[0] = selectedType;
+                notesTextarea.value = lines.join('\n');
+            }
+        }
+
+        // Ensure there's always at least a newline after the type
+        if (currentValue === selectedType) {
+            notesTextarea.value = selectedType + '\n';
+        }
+    });
+
+    notesTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
+        const selectedType = bottleTypeSelect.value;
+        if (!selectedType) return;
+
+        const textarea = e.target as HTMLTextAreaElement;
+        const cursorPos = textarea.selectionStart;
+        const firstLineLength = selectedType.length;
+
+        // Prevent any editing in the first line (including the newline after it)
+        if (cursorPos <= firstLineLength) {
+            // Allow navigation keys
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                return;
+            }
+
+            // Allow selecting text (but not modifying)
+            if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+                return;
+            }
+
+            // Prevent backspace/delete in the first line
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                return;
+            }
+
+            // For any character input, move cursor to after the newline
+            if (e.key.length === 1 || e.key === 'Enter') {
+                e.preventDefault();
+                textarea.selectionStart = firstLineLength + 1;
+                textarea.selectionEnd = firstLineLength + 1;
+
+                if (e.key === 'Enter') {
+                    // Insert newline at new cursor position
+                    const before = textarea.value.substring(0, firstLineLength + 1);
+                    const after = textarea.value.substring(firstLineLength + 1);
+                    textarea.value = before + '\n' + after;
+                    textarea.selectionStart = firstLineLength + 2;
+                    textarea.selectionEnd = firstLineLength + 2;
+                } else if (e.key.length === 1) {
+                    // Insert the character at new cursor position
+                    const before = textarea.value.substring(0, firstLineLength + 1);
+                    const after = textarea.value.substring(firstLineLength + 1);
+                    textarea.value = before + e.key + after;
+                    textarea.selectionStart = firstLineLength + 2;
+                    textarea.selectionEnd = firstLineLength + 2;
+                }
+                return;
+            }
+        }
+    });
+
+    notesTextarea.addEventListener('paste', (e: ClipboardEvent) => {
+        const selectedType = bottleTypeSelect.value;
+        if (!selectedType) return;
+
+        const textarea = e.target as HTMLTextAreaElement;
+        const cursorPos = textarea.selectionStart;
+        const firstLineLength = selectedType.length;
+
+        // If pasting in the first line, prevent it
+        if (cursorPos <= firstLineLength) {
+            e.preventDefault();
+            return;
+        }
+    });
+}
+
+function protectEditBottleNotesFirstLine(): void {
+    const notesTextarea = document.getElementById('edit-bottle-notes') as HTMLTextAreaElement;
+    const bottleTypeSelect = document.getElementById('edit-bottle-type') as HTMLSelectElement;
+
+    if (!notesTextarea || !bottleTypeSelect) return;
+
+    notesTextarea.addEventListener('input', () => {
+        const selectedType = bottleTypeSelect.value;
+        if (!selectedType) return;
+
+        const currentValue = notesTextarea.value;
+        const lines = currentValue.split('\n');
+
+        // If first line has been modified or removed, restore it
+        if (lines.length === 0 || (lines[0] !== selectedType && lines[0] !== '')) {
+            // User tried to modify the first line, restore it
+            if (lines.length === 0) {
+                notesTextarea.value = selectedType + '\n';
+            } else if (lines[0] !== selectedType) {
+                lines[0] = selectedType;
+                notesTextarea.value = lines.join('\n');
+            }
+        }
+
+        // Ensure there's always at least a newline after the type
+        if (currentValue === selectedType) {
+            notesTextarea.value = selectedType + '\n';
+        }
+    });
+
+    notesTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
+        const selectedType = bottleTypeSelect.value;
+        if (!selectedType) return;
+
+        const textarea = e.target as HTMLTextAreaElement;
+        const cursorPos = textarea.selectionStart;
+        const firstLineLength = selectedType.length;
+
+        // Prevent any editing in the first line (including the newline after it)
+        if (cursorPos <= firstLineLength) {
+            // Allow navigation keys
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                return;
+            }
+
+            // Allow selecting text (but not modifying)
+            if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+                return;
+            }
+
+            // Prevent backspace/delete in the first line
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                return;
+            }
+
+            // For any character input, move cursor to after the newline
+            if (e.key.length === 1 || e.key === 'Enter') {
+                e.preventDefault();
+                textarea.selectionStart = firstLineLength + 1;
+                textarea.selectionEnd = firstLineLength + 1;
+
+                if (e.key === 'Enter') {
+                    // Insert newline at new cursor position
+                    const before = textarea.value.substring(0, firstLineLength + 1);
+                    const after = textarea.value.substring(firstLineLength + 1);
+                    textarea.value = before + '\n' + after;
+                    textarea.selectionStart = firstLineLength + 2;
+                    textarea.selectionEnd = firstLineLength + 2;
+                } else if (e.key.length === 1) {
+                    // Insert the character at new cursor position
+                    const before = textarea.value.substring(0, firstLineLength + 1);
+                    const after = textarea.value.substring(firstLineLength + 1);
+                    textarea.value = before + e.key + after;
+                    textarea.selectionStart = firstLineLength + 2;
+                    textarea.selectionEnd = firstLineLength + 2;
+                }
+                return;
+            }
+        }
+    });
+
+    notesTextarea.addEventListener('paste', (e: ClipboardEvent) => {
+        const selectedType = bottleTypeSelect.value;
+        if (!selectedType) return;
+
+        const textarea = e.target as HTMLTextAreaElement;
+        const cursorPos = textarea.selectionStart;
+        const firstLineLength = selectedType.length;
+
+        // If pasting in the first line, prevent it
+        if (cursorPos <= firstLineLength) {
+            e.preventDefault();
+            return;
+        }
+    });
 }
 
 async function handleSubmitEntry(): Promise<void> {
@@ -525,6 +800,13 @@ async function handleSubmitEntry(): Promise<void> {
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
+            }
+
+            if (entryType === 'bottle-formula') {
+                const bottleType = (document.getElementById('bottle-type') as HTMLSelectElement).value;
+                if (!bottleType) {
+                    throw new Error('Formula type is required');
+                }
             }
 
             entry = {
@@ -622,12 +904,14 @@ async function handleSubmitEntry(): Promise<void> {
 function clearForm(): void {
     (document.getElementById('entry-type') as HTMLSelectElement).value = '';
     (document.getElementById('bottle-amount') as HTMLInputElement).value = '';
+    (document.getElementById('bottle-type') as HTMLSelectElement).value = '';
     (document.getElementById('bottle-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('diaper-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('pump-amount') as HTMLInputElement).value = '';
     (document.getElementById('pump-notes') as HTMLTextAreaElement).value = '';
 
     (document.getElementById('bottle-fields') as HTMLElement).style.display = 'none';
+    (document.getElementById('bottle-type-container') as HTMLElement).style.display = 'none';
     (document.getElementById('diaper-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('pump-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('submit-entry') as HTMLButtonElement).style.display = 'none';
@@ -821,7 +1105,7 @@ async function loadTimeline(): Promise<void> {
 
                 entry.style.backgroundColor = backgroundColor;
 
-                const notesHTML = data.notes ? `<div class="timeline-entry-notes">${data.notes}</div>` : '';
+                const notesHTML = data.notes ? `<div class="timeline-entry-notes">${data.notes.replace(/\n/g, '<br>')}</div>` : '';
 
                 entry.innerHTML = `
                     <div class="timeline-entry-header">
@@ -1267,11 +1551,31 @@ function openEditModal(docId: string, data: any): void {
         editBottleFields.style.display = 'block';
         const editBottleUnit = document.getElementById('edit-bottle-unit') as HTMLSelectElement;
         const editBottleAmount = document.getElementById('edit-bottle-amount') as HTMLInputElement;
+        const editBottleTypeContainer = document.getElementById('edit-bottle-type-container') as HTMLElement;
+        const editBottleTypeSelect = document.getElementById('edit-bottle-type') as HTMLSelectElement;
+
         (document.getElementById('edit-bottle-time') as HTMLInputElement).value = formatDateTime(startTime);
         editBottleAmount.value = data.amount.toFixed(2);
         editBottleUnit.value = data.unit || 'oz';
         editBottleAmount.dataset.lastUnit = data.unit || 'oz';
         (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value = data.notes || '';
+
+        // Show type selector only for Formula
+        if (data.subType === 'Formula') {
+            editBottleTypeContainer.style.display = 'block';
+
+            // Detect which formula type from notes
+            const notes = data.notes || '';
+            const firstLine = notes.split('\n')[0];
+            if (firstLine === 'Bobbie' || firstLine === 'Enfamil') {
+                editBottleTypeSelect.value = firstLine;
+            } else {
+                editBottleTypeSelect.value = '';
+            }
+        } else {
+            editBottleTypeContainer.style.display = 'none';
+            editBottleTypeSelect.value = '';
+        }
     } else if (data.type === 'Diaper') {
         editDiaperFields.style.display = 'block';
         (document.getElementById('edit-diaper-time') as HTMLInputElement).value = formatDateTime(startTime);
@@ -1319,6 +1623,8 @@ async function saveEdit(): Promise<void> {
             const amount = parseFloat((document.getElementById('edit-bottle-amount') as HTMLInputElement).value);
             const unit = (document.getElementById('edit-bottle-unit') as HTMLSelectElement).value;
             const notes = (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value;
+            const editBottleTypeContainer = document.getElementById('edit-bottle-type-container') as HTMLElement;
+            const editBottleType = (document.getElementById('edit-bottle-type') as HTMLSelectElement).value;
 
             if (!time) {
                 throw new Error('Start time is required');
@@ -1330,6 +1636,11 @@ async function saveEdit(): Promise<void> {
             }
             if (isNaN(amount) || amount <= 0) {
                 throw new Error('Amount must be greater than 0');
+            }
+
+            // Validate formula type if it's a formula bottle
+            if (editBottleTypeContainer.style.display !== 'none' && !editBottleType) {
+                throw new Error('Formula type is required');
             }
 
             updateData = {
@@ -1575,13 +1886,11 @@ function updateLastBottleDisplay(): void {
 
     const projectedTimes: string[] = [];
 
-    // If we're past 2.5 hours, show "in the next minute" as the first projected time
-    if (hoursSinceLastBottle > 2.5) {
+    if (hoursSinceLastBottle > 3) {
         projectedTimes.push('in the next minute');
 
-        // Calculate subsequent times from "now" (the projected next feed time)
         for (let i = 1; i <= 2; i++) {
-            const targetTime = new Date(now.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const targetTime = new Date(now.getTime() + (i * 3 * 60 * 60 * 1000));
             const hours = targetTime.getHours();
             const minutes = String(targetTime.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
@@ -1589,9 +1898,8 @@ function updateLastBottleDisplay(): void {
             projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
         }
     } else {
-        // Normal behavior - show all three projected times from last bottle
         for (let i = 1; i <= 3; i++) {
-            const targetTime = new Date(lastBottleTime.getTime() + (i * 2.5 * 60 * 60 * 1000));
+            const targetTime = new Date(lastBottleTime.getTime() + (i * 3 * 60 * 60 * 1000));
             const hours = targetTime.getHours();
             const minutes = String(targetTime.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
@@ -1600,7 +1908,12 @@ function updateLastBottleDisplay(): void {
         }
     }
 
-    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next feeds: ${projectedTimes.join(', ')})</span>`;
+    const nextFeedsText = projectedTimes.map((time, index) => {
+        const hoursLabel = (index + 1) * 3;
+        return `+ ${hoursLabel} hours: ${time}`;
+    }).join('<br>');
+
+    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">Next feeds:<br>${nextFeedsText}</span>`;
 }
 
 function updateLastPeeDisplay(): void {
@@ -1639,11 +1952,9 @@ function updateLastPumpDisplay(): void {
 
     const projectedTimes: string[] = [];
 
-    // If we're past 4 hours, show "in the next minute" as the first projected time
     if (hoursSinceLastPump > 4) {
         projectedTimes.push('in the next minute');
 
-        // Calculate subsequent times from "now" (the projected next pump time)
         for (let i = 1; i <= 2; i++) {
             const targetTime = new Date(now.getTime() + (i * 4 * 60 * 60 * 1000));
             const hours = targetTime.getHours();
@@ -1653,7 +1964,6 @@ function updateLastPumpDisplay(): void {
             projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
         }
     } else {
-        // Normal behavior - show all three projected times from last pump
         for (let i = 1; i <= 3; i++) {
             const targetTime = new Date(lastPumpTime.getTime() + (i * 4 * 60 * 60 * 1000));
             const hours = targetTime.getHours();
@@ -1664,15 +1974,13 @@ function updateLastPumpDisplay(): void {
         }
     }
 
-    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">(Next pumps: ${projectedTimes.join(', ')})</span>`;
-}
+    const nextPumpsText = projectedTimes.map((time, index) => {
+        const hoursLabel = (index + 1) * 4;
+        return `+ ${hoursLabel} hours: ${time}`;
+    }).join('<br>');
 
-document.getElementById('passcode-submit')?.addEventListener('click', checkPasscode);
-document.getElementById('passcode-input')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        checkPasscode();
-    }
-});
+    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">Next pumps:<br>${nextPumpsText}</span>`;
+}
 
 window.addEventListener('DOMContentLoaded', () => {
     if (isAuthenticated()) {
@@ -1689,5 +1997,13 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 0);
 
         initializeUI();
+    } else {
+        // Set up passcode event listeners
+        document.getElementById('passcode-submit')?.addEventListener('click', checkPasscode);
+        document.getElementById('passcode-input')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkPasscode();
+            }
+        });
     }
 });
