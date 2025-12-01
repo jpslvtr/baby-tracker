@@ -1442,47 +1442,72 @@ async function loadJsonData(): Promise<void> {
     const jsonContent = document.getElementById('json-content') as HTMLPreElement;
     const toggleButton = document.getElementById('toggle-json') as HTMLButtonElement;
     const copyButton = document.getElementById('copy-json') as HTMLButtonElement;
+    const jsonTabs = document.querySelector('.json-tabs') as HTMLElement;
+    const feedsTab = document.getElementById('feeds-json-tab') as HTMLButtonElement;
+    const diapersTab = document.getElementById('diapers-json-tab') as HTMLButtonElement;
 
     if (!jsonContent || !toggleButton || !copyButton) return;
+
+    let currentTab: 'feeds' | 'diapers' = 'feeds';
+    let feedsData: any[] = [];
+    let diapersData: any[] = [];
 
     try {
         const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
         const snapshot = await getDocs(q);
 
-        const entries = snapshot.docs.map(docSnapshot => {
+        snapshot.docs.forEach(docSnapshot => {
             const data = docSnapshot.data();
-            return {
-                id: docSnapshot.id,
-                type: data.type,
-                subType: data.subType || null,
-                startTime: data.startTime.toDate().toISOString(),
-                endTime: data.endTime ? data.endTime.toDate().toISOString() : null,
-                amount: data.amount || null,
-                unit: data.unit || null,
-                diaperType: data.diaperType || null,
-                notes: data.notes || ''
-            };
+
+            if (data.type === 'Feed') {
+                feedsData.push({
+                    type: data.type,
+                    subType: data.subType,
+                    startTime: data.startTime.toDate().toISOString(),
+                    amount: data.amount,
+                    unit: data.unit,
+                    notes: data.notes || ''
+                });
+            } else if (data.type === 'Diaper') {
+                diapersData.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    diaperType: data.diaperType,
+                    notes: data.notes || ''
+                });
+            }
         });
 
-        const jsonString = JSON.stringify(entries, null, 2);
-        jsonContent.textContent = jsonString;
+        const updateDisplay = () => {
+            const dataToShow = currentTab === 'feeds' ? feedsData : diapersData;
+            const jsonString = JSON.stringify(dataToShow, null, 2);
+            jsonContent.textContent = jsonString;
+            return jsonString;
+        };
 
-        // Remove old event listeners by cloning and replacing the buttons
+        let currentJsonString = updateDisplay();
+
         const newToggleButton = toggleButton.cloneNode(true) as HTMLButtonElement;
         const newCopyButton = copyButton.cloneNode(true) as HTMLButtonElement;
+        const newFeedsTab = feedsTab?.cloneNode(true) as HTMLButtonElement;
+        const newDiapersTab = diapersTab?.cloneNode(true) as HTMLButtonElement;
+
         toggleButton.parentNode?.replaceChild(newToggleButton, toggleButton);
         copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
+        if (feedsTab && newFeedsTab) feedsTab.parentNode?.replaceChild(newFeedsTab, feedsTab);
+        if (diapersTab && newDiapersTab) diapersTab.parentNode?.replaceChild(newDiapersTab, diapersTab);
 
         newToggleButton.addEventListener('click', () => {
             const isHidden = jsonContent.style.display === 'none';
             jsonContent.style.display = isHidden ? 'block' : 'none';
             newCopyButton.style.display = isHidden ? 'block' : 'none';
+            if (jsonTabs) jsonTabs.style.display = isHidden ? 'flex' : 'none';
             newToggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
         });
 
         newCopyButton.addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(jsonString);
+                await navigator.clipboard.writeText(currentJsonString);
                 const originalText = newCopyButton.textContent;
                 newCopyButton.textContent = '✓';
                 setTimeout(() => {
@@ -1492,6 +1517,24 @@ async function loadJsonData(): Promise<void> {
                 alert('Failed to copy to clipboard');
             }
         });
+
+        if (newFeedsTab) {
+            newFeedsTab.addEventListener('click', () => {
+                currentTab = 'feeds';
+                newFeedsTab.classList.add('active');
+                newDiapersTab.classList.remove('active');
+                currentJsonString = updateDisplay();
+            });
+        }
+
+        if (newDiapersTab) {
+            newDiapersTab.addEventListener('click', () => {
+                currentTab = 'diapers';
+                newDiapersTab.classList.add('active');
+                newFeedsTab.classList.remove('active');
+                currentJsonString = updateDisplay();
+            });
+        }
     } catch (error) {
         jsonContent.textContent = 'Failed to load data';
     }
