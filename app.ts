@@ -1445,12 +1445,14 @@ async function loadJsonData(): Promise<void> {
     const jsonTabs = document.querySelector('.json-tabs') as HTMLElement;
     const feedsTab = document.getElementById('feeds-json-tab') as HTMLButtonElement;
     const diapersTab = document.getElementById('diapers-json-tab') as HTMLButtonElement;
+    const pumpsTab = document.getElementById('pumps-json-tab') as HTMLButtonElement;
 
     if (!jsonContent || !toggleButton || !copyButton) return;
 
-    let currentTab: 'feeds' | 'diapers' = 'feeds';
+    let currentTab: 'feeds' | 'diapers' | 'pumps' = 'feeds';
     let feedsData: any[] = [];
     let diapersData: any[] = [];
+    let pumpsData: any[] = [];
 
     try {
         const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
@@ -1475,11 +1477,26 @@ async function loadJsonData(): Promise<void> {
                     diaperType: data.diaperType,
                     notes: data.notes || ''
                 });
+            } else if (data.type === 'Pump') {
+                pumpsData.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    amount: data.amount,
+                    unit: data.unit,
+                    notes: data.notes || ''
+                });
             }
         });
 
         const updateDisplay = () => {
-            const dataToShow = currentTab === 'feeds' ? feedsData : diapersData;
+            let dataToShow;
+            if (currentTab === 'feeds') {
+                dataToShow = feedsData;
+            } else if (currentTab === 'diapers') {
+                dataToShow = diapersData;
+            } else {
+                dataToShow = pumpsData;
+            }
             const jsonString = JSON.stringify(dataToShow, null, 2);
             jsonContent.textContent = jsonString;
             return jsonString;
@@ -1491,11 +1508,13 @@ async function loadJsonData(): Promise<void> {
         const newCopyButton = copyButton.cloneNode(true) as HTMLButtonElement;
         const newFeedsTab = feedsTab?.cloneNode(true) as HTMLButtonElement;
         const newDiapersTab = diapersTab?.cloneNode(true) as HTMLButtonElement;
+        const newPumpsTab = pumpsTab?.cloneNode(true) as HTMLButtonElement;
 
         toggleButton.parentNode?.replaceChild(newToggleButton, toggleButton);
         copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
         if (feedsTab && newFeedsTab) feedsTab.parentNode?.replaceChild(newFeedsTab, feedsTab);
         if (diapersTab && newDiapersTab) diapersTab.parentNode?.replaceChild(newDiapersTab, diapersTab);
+        if (pumpsTab && newPumpsTab) pumpsTab.parentNode?.replaceChild(newPumpsTab, pumpsTab);
 
         newToggleButton.addEventListener('click', () => {
             const isHidden = jsonContent.style.display === 'none';
@@ -1523,6 +1542,7 @@ async function loadJsonData(): Promise<void> {
                 currentTab = 'feeds';
                 newFeedsTab.classList.add('active');
                 newDiapersTab.classList.remove('active');
+                newPumpsTab.classList.remove('active');
                 currentJsonString = updateDisplay();
             });
         }
@@ -1532,6 +1552,17 @@ async function loadJsonData(): Promise<void> {
                 currentTab = 'diapers';
                 newDiapersTab.classList.add('active');
                 newFeedsTab.classList.remove('active');
+                newPumpsTab.classList.remove('active');
+                currentJsonString = updateDisplay();
+            });
+        }
+
+        if (newPumpsTab) {
+            newPumpsTab.addEventListener('click', () => {
+                currentTab = 'pumps';
+                newPumpsTab.classList.add('active');
+                newFeedsTab.classList.remove('active');
+                newDiapersTab.classList.remove('active');
                 currentJsonString = updateDisplay();
             });
         }
