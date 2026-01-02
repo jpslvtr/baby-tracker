@@ -50,6 +50,7 @@ let lastPeeTimerInterval: number | null = null;
 let lastPooTimerInterval: number | null = null;
 let lastPumpTimerInterval: number | null = null;
 let vitaminDDateCheckInterval: number | null = null;
+let dataChart: any = null;
 
 function getWeekStart(date: Date): Date {
     const d = new Date(date);
@@ -452,13 +453,26 @@ function setupEventListeners(): void {
     twoDaysAgoButton.addEventListener('click', () => handleQuickFilter('two-days-ago'));
     threeDaysAgoButton.addEventListener('click', () => handleQuickFilter('three-days-ago'));
     allTimeButton.addEventListener('click', () => handleQuickFilter('all-time'));
-
+    
     attachTimeValidation('bottle-time');
     attachTimeValidation('diaper-time');
     attachTimeValidation('pump-start-time');
     attachTimeValidation('edit-bottle-time');
     attachTimeValidation('edit-diaper-time');
     attachTimeValidation('edit-pump-start-time');
+
+    const graphStartDate = document.getElementById('graph-start-date') as HTMLInputElement;
+    const graphEndDate = document.getElementById('graph-end-date') as HTMLInputElement;
+    if (graphStartDate && graphEndDate) {
+        const BIRTH_DATE = new Date('2025-11-05');
+        graphStartDate.value = formatDateForInput(BIRTH_DATE);
+        graphEndDate.value = formatDateForInput(new Date());
+    }
+
+    const updateGraphBtn = document.getElementById('update-graph-btn');
+    if (updateGraphBtn) {
+        updateGraphBtn.addEventListener('click', updateGraph);
+    }
 }
 
 function setDefaultTimes(): void {
@@ -947,6 +961,7 @@ function switchTab(tab: string): void {
     } else if (tab === 'timeline') {
         document.getElementById('timeline-tab')?.classList.add('active');
         (document.getElementById('timeline-view') as HTMLElement).style.display = 'block';
+        loadWeeklyView();
         loadTimeline();
     } else if (tab === 'weekly') {
         document.getElementById('weekly-tab')?.classList.add('active');
@@ -1047,13 +1062,25 @@ async function loadTimeline(): Promise<void> {
                     } else if (data.type === 'Feed' && data.subType === 'Formula') {
                         entryType = 'bottle-formula';
                     } else if (data.type === 'Diaper') {
-                        entryType = 'diaper';
+                        entryType = 'diaper-all';
                     } else if (data.type === 'Pump') {
                         entryType = 'pump';
                     }
 
                     if (typeFilter === 'bottle-all') {
                         if (data.type !== 'Feed') {
+                            return;
+                        }
+                    } else if (typeFilter === 'diaper-all') {
+                        if (data.type !== 'Diaper') {
+                            return;
+                        }
+                    } else if (typeFilter === 'diaper-pee') {
+                        if (data.type !== 'Diaper' || (data.diaperType !== 'Pee' && data.diaperType !== 'Mixed')) {
+                            return;
+                        }
+                    } else if (typeFilter === 'diaper-poo') {
+                        if (data.type !== 'Diaper' || (data.diaperType !== 'Poo' && data.diaperType !== 'Mixed')) {
                             return;
                         }
                     } else if (entryType !== typeFilter) {
@@ -1124,12 +1151,36 @@ async function loadTimeline(): Promise<void> {
 
                 const notesHTML = data.notes ? `<div class="timeline-entry-notes">${data.notes.replace(/\n/g, '<br>')}</div>` : '';
 
+                // Calculate time since previous poo for Diaper - Poo filter
+                let timeSincePooHTML = '';
+                if (typeFilter === 'diaper-poo' && data.type === 'Diaper' && (data.diaperType === 'Poo' || data.diaperType === 'Mixed')) {
+                    const currentTime = startTime.getTime();
+                    const allPooEntries: { time: number }[] = [];
+
+                    snapshot.forEach(d => {
+                        const entryData = d.data();
+                        if (entryData.type === 'Diaper' && (entryData.diaperType === 'Poo' || entryData.diaperType === 'Mixed')) {
+                            allPooEntries.push({ time: entryData.startTime.toDate().getTime() });
+                        }
+                    });
+
+                    allPooEntries.sort((a, b) => b.time - a.time); // Newest first
+
+                    const currentIndex = allPooEntries.findIndex(e => e.time === currentTime);
+                    if (currentIndex < allPooEntries.length - 1) { // Check if there's an older entry
+                        const previousPooTime = allPooEntries[currentIndex + 1].time; // Next in array = older in time
+                        const hoursSince = (currentTime - previousPooTime) / (1000 * 60 * 60);
+                        timeSincePooHTML = `<div class="timeline-entry-details" style="color: #666; font-style: italic;">${hoursSince.toFixed(1)} hours since previous poo</div>`;
+                    }
+                }
+
                 entry.innerHTML = `
                     <div class="timeline-entry-header">
                         <span class="timeline-entry-type">${typeDisplay}</span>
                         <span class="timeline-entry-time">${formatDisplayDateTime(startTime)}</span>
                     </div>
                     ${detailsHTML}
+                    ${timeSincePooHTML}
                     ${notesHTML}
                     <div class="timeline-entry-actions">
                         <button class="edit-button" data-id="${docId}">Edit</button>
@@ -1166,7 +1217,7 @@ async function loadTimeline(): Promise<void> {
                     `;
                 }
 
-                if (typeFilter === 'all' || typeFilter === 'diaper') {
+                if (typeFilter === 'all' || typeFilter === 'diaper-all' || typeFilter === 'diaper-pee' || typeFilter === 'diaper-poo') {
                     const totalPee = summaryStats.diapers.pee + summaryStats.diapers.mixed;
                     const totalPoo = summaryStats.diapers.poo + summaryStats.diapers.mixed;
 
@@ -1568,6 +1619,195 @@ async function loadJsonData(): Promise<void> {
         }
     } catch (error) {
         jsonContent.textContent = 'Failed to load data';
+    }
+}
+
+async function updateGraph(): Promise<void> {
+    const startDateInput = (document.getElementById('graph-start-date') as HTMLInputElement).value;
+    const endDateInput = (document.getElementById('graph-end-date') as HTMLInputElement).value;
+
+    if (!startDateInput || !endDateInput) {
+        alert('Please select both start and end dates');
+        return;
+    }
+
+    const selectedSeries: string[] = [];
+    document.querySelectorAll('.graph-checkbox:checked').forEach(checkbox => {
+        selectedSeries.push((checkbox as HTMLInputElement).dataset.series!);
+    });
+
+    if (selectedSeries.length === 0) {
+        alert('Please select at least one data series to plot');
+        return;
+    }
+
+    const startDate = new Date(startDateInput);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(endDateInput);
+    endDate.setHours(23, 59, 59, 999);
+
+    const q = query(
+        collection(db, 'entries'),
+        where('startTime', '>=', Timestamp.fromDate(startDate)),
+        where('startTime', '<=', Timestamp.fromDate(endDate)),
+        orderBy('startTime', 'asc')
+    );
+
+    const snapshot = await getDocs(q);
+
+    const dateMap: { [key: string]: { [key: string]: number } } = {};
+
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+        const dateKey = formatDateForInput(currentDate);
+        dateMap[dateKey] = {
+            'bottle-breast-milk': 0,
+            'bottle-formula': 0,
+            'bottle-all': 0,
+            'diaper-pee': 0,
+            'diaper-poo': 0,
+            'diaper-mixed': 0,
+            'diaper-all': 0,
+            'pump': 0
+        };
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        const date = data.startTime.toDate();
+        const dateKey = formatDateForInput(date);
+
+        if (dateMap[dateKey]) {
+            if (data.type === 'Feed' && data.subType === 'Breast Milk') {
+                const amountOz = convertToOz(data.amount, data.unit);
+                dateMap[dateKey]['bottle-breast-milk'] += amountOz;
+                dateMap[dateKey]['bottle-all'] += amountOz;
+            } else if (data.type === 'Feed' && data.subType === 'Formula') {
+                const amountOz = convertToOz(data.amount, data.unit);
+                dateMap[dateKey]['bottle-formula'] += amountOz;
+                dateMap[dateKey]['bottle-all'] += amountOz;
+            } else if (data.type === 'Diaper') {
+                if (data.diaperType === 'Pee' || data.diaperType === 'Mixed') {
+                    dateMap[dateKey]['diaper-pee']++;
+                }
+                if (data.diaperType === 'Poo' || data.diaperType === 'Mixed') {
+                    dateMap[dateKey]['diaper-poo']++;
+                }
+                if (data.diaperType === 'Mixed') {
+                    dateMap[dateKey]['diaper-mixed']++;
+                }
+                dateMap[dateKey]['diaper-all']++;
+            } else if (data.type === 'Pump') {
+                const amountOz = convertToOz(data.amount, data.unit);
+                dateMap[dateKey]['pump'] += amountOz;
+            }
+        }
+    });
+
+    const labels = Object.keys(dateMap).sort();
+    const datasets: any[] = [];
+
+    const colorMap: { [key: string]: string } = {
+        'bottle-breast-milk': '#4CAF50',
+        'bottle-formula': '#2196F3',
+        'bottle-all': '#9C27B0',
+        'diaper-pee': '#FFEB3B',
+        'diaper-poo': '#795548',
+        'diaper-mixed': '#FF9800',
+        'diaper-all': '#607D8B',
+        'pump': '#E91E63'
+    };
+
+    const labelMap: { [key: string]: string } = {
+        'bottle-breast-milk': 'Bottle - Breast Milk',
+        'bottle-formula': 'Bottle - Formula',
+        'bottle-all': 'Bottle - All',
+        'diaper-pee': 'Diaper - Pee',
+        'diaper-poo': 'Diaper - Poo',
+        'diaper-mixed': 'Diaper - Mixed',
+        'diaper-all': 'Diaper - All',
+        'pump': 'Pump'
+    };
+
+    selectedSeries.forEach(series => {
+        datasets.push({
+            label: labelMap[series],
+            data: labels.map(date => dateMap[date][series]),
+            borderColor: colorMap[series],
+            backgroundColor: colorMap[series] + '33',
+            tension: 0.1,
+            fill: false
+        });
+    });
+
+    const canvas = document.getElementById('data-chart') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d')!;
+
+    if (dataChart) {
+        dataChart.destroy();
+    }
+
+    dataChart = new (window as any).Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels.map(date => {
+                const [, month, day] = date.split('-');
+                return `${month}/${day}`;
+            }),
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1,
+            interaction: {
+                mode: 'nearest',
+                intersect: false,
+                axis: 'x'
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                title: {
+                    display: true,
+                    text: 'Baby Tracker Data'
+                },
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        label: function (context: any) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            label += context.parsed.y;
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function (value: any) {
+                            return value.toFixed(1) + ' oz';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Amount (oz) / Count'
+                    }
+                }
+            }
+        }
+    });
+    const chartContainer = document.querySelector('.chart-container') as HTMLElement;
+    if (chartContainer) {
+        chartContainer.classList.add('active');
     }
 }
 

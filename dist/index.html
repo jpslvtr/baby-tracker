@@ -4,20 +4,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Baby Tracker">
     <title>Baby Tracker</title>
-  <script type="module" crossorigin src="/baby-tracker/assets/main-tncQJzLs.js"></script>
-  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-hGU0Ufxf.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <script type="module" crossorigin src="/baby-tracker/assets/main-DKRmgnKP.js"></script>
+  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-DaM9FwMO.css">
 </head>
 
 <body>
     <div id="passcode-screen" class="passcode-container">
         <div class="passcode-box">
             <h1>Baby Tracker</h1>
-            <input type="text" id="passcode-input" placeholder="Enter passcode">
-            <button id="passcode-submit">Enter</button>
+            <input type="password" id="passcode-input" placeholder="Enter passcode">
+            <button id="passcode-submit">Unlock</button>
             <div id="passcode-error"></div>
         </div>
     </div>
@@ -25,44 +25,48 @@
     <div id="app" class="container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h1 style="margin: 0;">Baby Tracker</h1>
-            <button id="refresh-button" style="width: 40px; height: 40px; padding: 0; margin: 0; font-size: 20px;">↻</button>
+            <button id="refresh-button"
+                style="width: 40px; height: 40px; padding: 0; margin: 0; font-size: 20px;">↻</button>
         </div>
-
+    
         <div class="tab-buttons">
-            <button id="entry-tab" class="tab-button active">Add Entry</button>
-            <button id="timeline-tab" class="tab-button">Entries</button>
-            <button id="weekly-tab" class="tab-button">Weekly View</button>
+            <button id="entry-tab" class="tab-button active">Entry</button>
+            <button id="timeline-tab" class="tab-button">Timeline</button>
+            <button id="weekly-tab" class="tab-button">Data</button>
         </div>
 
-        <div class="timer-grid">
-            <div class="timer-item">
-                <div class="timer-label">Time since last Bottle:</div>
-                <div id="last-bottle-value" class="timer-value">Loading...</div>
-            </div>
-            <div class="timer-item">
-                <div class="timer-label">Time since last Pump:</div>
-                <div id="last-pump-value" class="timer-value">Loading...</div>
-            </div>
-            <div class="timer-item">
-                <div class="timer-label">Time since last Pee:</div>
-                <div id="last-pee-value" class="timer-value">Loading...</div>
-            </div>
-            <div class="timer-item">
-                <div class="timer-label">Time since last Poo:</div>
-                <div id="last-poo-value" class="timer-value">Loading...</div>
-            </div>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
         </div>
 
         <div id="entry-view" class="view active">
-            <div class="vitamin-d-section">
-                <label class="vitamin-d-label">
-                    <input type="checkbox" id="vitamin-d-checkbox">
-                    <span id="vitamin-d-label-text">Record Vitamin D drop</span>
-                </label>
-                <div id="vitamin-d-status" style="display: none;"></div>
-            </div>
-        
             <div class="panel">
+                <div class="timer-grid">
+                    <div class="timer-item">
+                        <div class="timer-label">Last Bottle</div>
+                        <div id="last-bottle-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Last Pump</div>
+                        <div id="last-pump-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Last Pee</div>
+                        <div id="last-pee-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Last Poo</div>
+                        <div id="last-poo-value" class="timer-value">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="vitamin-d-section">
+                    <label class="vitamin-d-label">
+                        <input type="checkbox" id="vitamin-d-checkbox">
+                        <span id="vitamin-d-label-text">Record Vitamin D drop</span>
+                    </label>
+                    <div id="vitamin-d-status"></div>
+                </div>
+
                 <label>Entry Type:</label>
                 <select id="entry-type">
                     <option value="">Select type...</option>
@@ -72,7 +76,7 @@
                     <option value="pump">Pump</option>
                 </select>
 
-                <div id="bottle-fields" class="entry-fields" style="display: none;">
+                <div id="bottle-fields" class="entry-fields">
                     <label>Start Time:</label>
                     <input type="datetime-local" id="bottle-time">
 
@@ -84,7 +88,7 @@
                             <option value="ml">ml</option>
                         </select>
                     </div>
-                    
+
                     <div id="bottle-type-container" style="display: none;">
                         <label>Type:</label>
                         <select id="bottle-type">
@@ -93,15 +97,16 @@
                             <option value="Enfamil">Enfamil</option>
                         </select>
                     </div>
-                    
+
                     <label>Notes:</label>
                     <div id="bottle-type-indicator"
                         style="display: none; font-style: italic; color: #666; font-size: 12px; margin-bottom: 5px; background-color: #f0f0f0; padding: 5px; border-left: 3px solid #4a90e2;">
-                        Type: <span id="bottle-type-text"></span></div>
+                        Type: <span id="bottle-type-text"></span>
+                    </div>
                     <textarea id="bottle-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
-                <div id="diaper-fields" class="entry-fields" style="display: none;">
+                <div id="diaper-fields" class="entry-fields">
                     <label>Start Time:</label>
                     <input type="datetime-local" id="diaper-time">
 
@@ -116,10 +121,10 @@
                     <textarea id="diaper-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
-                <div id="pump-fields" class="entry-fields" style="display: none;">
+                <div id="pump-fields" class="entry-fields">
                     <label>Start Time:</label>
                     <input type="datetime-local" id="pump-start-time">
-                
+
                     <label>Amount:</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="number" step="0.01" id="pump-amount" placeholder="0.00" style="flex: 1;">
@@ -133,13 +138,22 @@
                     <textarea id="pump-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
-                <button id="submit-entry" style="display: none;">Add Entry</button>
+                <button id="submit-entry">Add Entry</button>
                 <div id="submit-status"></div>
             </div>
         </div>
 
-        <div id="timeline-view" class="view" style="display: none;">
+        <div id="timeline-view" class="view">
             <div class="panel">
+                <div class="week-navigation">
+                    <button id="prev-week">&lt;</button>
+                    <span id="week-range"></span>
+                    <button id="next-week">&gt;</button>
+                </div>
+                <button id="current-week" class="current-week-button">Current Week</button>
+                <div id="weekly-loading">Loading...</div>
+                <div id="weekly-stats"></div>
+                <hr style="margin: 20px 0; border: none; border-top: 2px solid #ccc;">
                 <div class="filter-section">
                     <div class="quick-filters">
                         <button id="today-button" class="quick-filter-button">Today</button>
@@ -161,7 +175,9 @@
                         <option value="bottle-all">Bottle - All</option>
                         <option value="bottle-breast-milk">Bottle - Breast Milk</option>
                         <option value="bottle-formula">Bottle - Formula</option>
-                        <option value="diaper">Diaper</option>
+                        <option value="diaper-all">Diaper - All</option>
+                        <option value="diaper-pee">Diaper - Pee</option>
+                        <option value="diaper-poo">Diaper - Poo</option>
                         <option value="pump">Pump</option>
                     </select>
                 </div>
@@ -171,14 +187,14 @@
             </div>
         </div>
 
-        <div id="edit-modal" class="modal" style="display: none;">
+        <div id="edit-modal" class="modal">
             <div class="modal-content">
                 <h2>Edit Entry</h2>
 
                 <div id="edit-bottle-fields" style="display: none;">
                     <label>Start Time:</label>
                     <input type="datetime-local" id="edit-bottle-time">
-                
+
                     <label>Amount:</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="number" step="0.01" id="edit-bottle-amount" placeholder="0.00" style="flex: 1;">
@@ -187,7 +203,7 @@
                             <option value="ml">ml</option>
                         </select>
                     </div>
-                
+
                     <div id="edit-bottle-type-container" style="display: none;">
                         <label>Type:</label>
                         <select id="edit-bottle-type">
@@ -196,11 +212,12 @@
                             <option value="Enfamil">Enfamil</option>
                         </select>
                     </div>
-                
+
                     <label>Notes:</label>
                     <div id="edit-bottle-type-indicator"
                         style="display: none; font-style: italic; color: #666; font-size: 12px; margin-bottom: 5px; background-color: #f0f0f0; padding: 5px; border-left: 3px solid #4a90e2;">
-                        Type: <span id="edit-bottle-type-text"></span></div>
+                        Type: <span id="edit-bottle-type-text"></span>
+                    </div>
                     <textarea id="edit-bottle-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
@@ -222,7 +239,7 @@
                 <div id="edit-pump-fields" style="display: none;">
                     <label>Start Time:</label>
                     <input type="datetime-local" id="edit-pump-start-time">
-                
+
                     <label>Amount:</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="number" step="0.01" id="edit-pump-amount" placeholder="0.00" style="flex: 1;">
@@ -244,31 +261,64 @@
             </div>
         </div>
 
-        <div id="weekly-view" class="view" style="display: none;">
+        <div id="weekly-view" class="view">
             <div class="panel">
-                <div class="week-navigation">
-                    <button id="prev-week">&lt;</button>
-                    <span id="week-range"></span>
-                    <button id="next-week">&gt;</button>
-                </div>
-                <button id="current-week" class="current-week-button">Current Week</button>
-                <div id="weekly-loading">Loading...</div>
-                <div id="weekly-stats"></div>
-                
-                <div id="json-data" style="margin-top: 20px;">
-                    <div class="json-tabs" style="display: none; margin-bottom: 10px;">
+                <!-- Graph Section -->
+                <div class="graph-section">
+                    <h3>Graph Data</h3>
+
+                    <div class="date-filter">
+                        <label>Start Date:</label>
+                        <input type="date" id="graph-start-date">
+                        <label>End Date:</label>
+                        <input type="date" id="graph-end-date">
+                    </div>
+
+                    <div class="graph-controls">
+                        <h4>Select Data to Plot:</h4>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" class="graph-checkbox" data-series="bottle-breast-milk" />
+                                Bottle - Breast Milk</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="bottle-formula" /> Bottle
+                                - Formula</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="bottle-all" /> Bottle -
+                                All</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="diaper-pee" /> Diaper -
+                                Pee</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="diaper-poo" /> Diaper -
+                                Poo</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="diaper-mixed" /> Diaper -
+                                Mixed</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="diaper-all" /> Diaper -
+                                All</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="pump" /> Pump</label>
+                        </div>
+                        <button id="update-graph-btn" class="update-graph-btn">Update Graph</button>
+                        </div>
+                        </div>
+                        
+                        <!-- Chart Container (shows only after graph is generated) -->
+                        <div class="chart-container">
+                            <canvas id="data-chart"></canvas>
+                        </div>
+                        
+                <!-- JSON Data Section (shows immediately) -->
+                <div id="json-data">
+                    <button id="toggle-json" class="current-week-button">Show JSON Data</button>
+                    <div class="json-tabs" style="margin-bottom: 10px; display: none;">
                         <button id="feeds-json-tab" class="json-tab-button active">Feeds</button>
                         <button id="diapers-json-tab" class="json-tab-button">Diapers</button>
                         <button id="pumps-json-tab" class="json-tab-button">Pumps</button>
                     </div>
-                    <button id="toggle-json" class="current-week-button">Show JSON Data</button>
                     <div style="position: relative;">
-                        <button id="copy-json" class="copy-json-button" style="display: none;" title="Copy to clipboard">📋</button>
+                        <button id="copy-json" class="copy-json-button" style="display: none;"
+                            title="Copy to clipboard">📋</button>
                         <pre id="json-content" class="json-content-box" style="display: none;"></pre>
                     </div>
                 </div>
             </div>
         </div>
+
         <div class="footer">
             © 2025 James Park
         </div>
