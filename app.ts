@@ -1784,7 +1784,16 @@ async function updateGraph(): Promise<void> {
                             if (label) {
                                 label += ': ';
                             }
-                            label += context.parsed.y;
+                            const value = context.parsed.y;
+                            const seriesName = context.dataset.label.toLowerCase();
+
+                            // Check if it's a diaper series
+                            if (seriesName.includes('diaper')) {
+                                label += Math.round(value);
+                            } else {
+                                // For bottles/pumps, round to nearest tenth and add oz
+                                label += value.toFixed(1) + ' oz';
+                            }
                             return label;
                         }
                     }
@@ -1795,7 +1804,13 @@ async function updateGraph(): Promise<void> {
                     beginAtZero: true,
                     ticks: {
                         callback: function (value: any) {
-                            return value.toFixed(1) + ' oz';
+                            // Check if any selected series is a diaper type
+                            const isDiaperOnly = selectedSeries.every(s => s.startsWith('diaper-'));
+                            if (isDiaperOnly) {
+                                return Math.round(value);
+                            }
+                            // For bottles/pumps, show whole numbers without .0
+                            return value % 1 === 0 ? value : value.toFixed(1) + ' oz';
                         }
                     },
                     title: {
