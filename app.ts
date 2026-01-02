@@ -464,7 +464,7 @@ function setupEventListeners(): void {
     const graphStartDate = document.getElementById('graph-start-date') as HTMLInputElement;
     const graphEndDate = document.getElementById('graph-end-date') as HTMLInputElement;
     if (graphStartDate && graphEndDate) {
-        const BIRTH_DATE = new Date('2025-11-05');
+        const BIRTH_DATE = new Date(2025, 10, 5);
         graphStartDate.value = formatDateForInput(BIRTH_DATE);
         graphEndDate.value = formatDateForInput(new Date());
     }
@@ -979,8 +979,9 @@ function handleQuickFilter(filterType: string): void {
     today.setHours(0, 0, 0, 0);
 
     if (filterType === 'all-time') {
-        startDateInput.value = '';
-        endDateInput.value = '';
+        const BIRTH_DATE = new Date(2025, 10, 5);
+        startDateInput.value = formatDateForInput(BIRTH_DATE);
+        endDateInput.value = formatDateForInput(today);
     } else if (filterType === 'today') {
         startDateInput.value = formatDateForInput(today);
         endDateInput.value = formatDateForInput(today);
@@ -1264,7 +1265,7 @@ async function loadWeeklyView(): Promise<void> {
     const nextWeekBtn = document.getElementById('next-week') as HTMLButtonElement;
     const currentWeekBtn = document.getElementById('current-week') as HTMLButtonElement | null;
 
-    const BIRTH_DATE = new Date('2025-11-05');
+    const BIRTH_DATE = new Date(2025, 10, 5);
     const birthWeekStart = getWeekStart(BIRTH_DATE);
 
     const today = new Date();
@@ -1812,7 +1813,7 @@ async function updateGraph(): Promise<void> {
 }
 
 function changeWeek(direction: number): void {
-    const BIRTH_DATE = new Date('2025-11-05');
+    const BIRTH_DATE = new Date(2025, 10, 5);
     const birthWeekStart = getWeekStart(BIRTH_DATE);
     const today = new Date();
     const currentWeekStartDate = getWeekStart(today);
