@@ -1152,9 +1152,9 @@ async function loadTimeline(): Promise<void> {
 
                 const notesHTML = data.notes ? `<div class="timeline-entry-notes">${data.notes.replace(/\n/g, '<br>')}</div>` : '';
 
-                // Calculate time since previous poo for Diaper - Poo filter
+                // Calculate time since previous poo for all Poo and Mixed diapers
                 let timeSincePooHTML = '';
-                if (typeFilter === 'diaper-poo' && data.type === 'Diaper' && (data.diaperType === 'Poo' || data.diaperType === 'Mixed')) {
+                if (data.type === 'Diaper' && (data.diaperType === 'Poo' || data.diaperType === 'Mixed')) {
                     const currentTime = startTime.getTime();
                     const allPooEntries: { time: number }[] = [];
 
@@ -1181,8 +1181,8 @@ async function loadTimeline(): Promise<void> {
                         <span class="timeline-entry-time">${formatDisplayDateTime(startTime)}</span>
                     </div>
                     ${detailsHTML}
-                    ${timeSincePooHTML}
                     ${notesHTML}
+                    ${timeSincePooHTML}
                     <div class="timeline-entry-actions">
                         <button class="edit-button" data-id="${docId}">Edit</button>
                         <button class="delete-button" data-id="${docId}">Delete</button>
