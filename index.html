@@ -8,8 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
-  <script type="module" crossorigin src="/baby-tracker/assets/main-d7oOx-2c.js"></script>
-  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-DaM9FwMO.css">
+  <script type="module" crossorigin src="/baby-tracker/assets/main-c4jL8hR_.js"></script>
+  <link rel="stylesheet" crossorigin href="/baby-tracker/assets/main-G92nSwlq.css">
 </head>
 
 <body>
@@ -28,7 +28,7 @@
             <button id="refresh-button"
                 style="width: 40px; height: 40px; padding: 0; margin: 0; font-size: 20px;">↻</button>
         </div>
-    
+
         <div class="tab-buttons">
             <button id="entry-tab" class="tab-button active">Add Entry</button>
             <button id="timeline-tab" class="tab-button">Data</button>
@@ -41,6 +41,10 @@
         <div id="entry-view" class="view active">
             <div class="panel">
                 <div class="timer-grid">
+                    <div class="timer-item timer-item-wide">
+                        <div class="timer-label">Time Awake</div>
+                        <div id="time-awake-value" class="timer-value">Loading...</div>
+                    </div>
                     <div class="timer-item">
                         <div class="timer-label">Last Bottle</div>
                         <div id="last-bottle-value" class="timer-value">Loading...</div>
@@ -74,6 +78,7 @@
                     <option value="bottle-formula">Bottle - Formula</option>
                     <option value="diaper">Diaper</option>
                     <option value="pump">Pump</option>
+                    <option value="sleep">Sleep</option>
                 </select>
 
                 <div id="bottle-fields" class="entry-fields">
@@ -138,6 +143,17 @@
                     <textarea id="pump-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
+                <div id="sleep-fields" class="entry-fields">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="sleep-start-time">
+
+                    <label>End Time (optional):</label>
+                    <input type="datetime-local" id="sleep-end-time">
+
+                    <label>Notes:</label>
+                    <textarea id="sleep-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
                 <button id="submit-entry">Add Entry</button>
                 <div id="submit-status"></div>
             </div>
@@ -179,6 +195,7 @@
                         <option value="diaper-pee">Diaper - Pee</option>
                         <option value="diaper-poo">Diaper - Poo</option>
                         <option value="pump">Pump</option>
+                        <option value="sleep">Sleep</option>
                     </select>
                 </div>
 
@@ -253,6 +270,17 @@
                     <textarea id="edit-pump-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
+                <div id="edit-sleep-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="edit-sleep-start-time">
+
+                    <label>End Time (optional):</label>
+                    <input type="datetime-local" id="edit-sleep-end-time">
+
+                    <label>Notes:</label>
+                    <textarea id="edit-sleep-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
                 <div class="modal-buttons">
                     <button id="save-edit">Save</button>
                     <button id="cancel-edit">Cancel</button>
@@ -291,16 +319,18 @@
                             <label><input type="checkbox" class="graph-checkbox" data-series="diaper-all" /> Diaper -
                                 All</label>
                             <label><input type="checkbox" class="graph-checkbox" data-series="pump" /> Pump</label>
+                            <label><input type="checkbox" class="graph-checkbox" data-series="sleep" /> Sleep
+                                (hours)</label>
                         </div>
                         <button id="update-graph-btn" class="update-graph-btn">Update Graph</button>
-                        </div>
-                        </div>
-                        
-                        <!-- Chart Container (shows only after graph is generated) -->
-                        <div class="chart-container">
-                            <canvas id="data-chart"></canvas>
-                        </div>
-                        
+                    </div>
+                </div>
+
+                <!-- Chart Container (shows only after graph is generated) -->
+                <div class="chart-container">
+                    <canvas id="data-chart"></canvas>
+                </div>
+
                 <!-- JSON Data Section (shows immediately) -->
                 <div id="json-data">
                     <button id="toggle-json" class="current-week-button">Show JSON Data</button>
@@ -308,6 +338,7 @@
                         <button id="feeds-json-tab" class="json-tab-button active">Feeds</button>
                         <button id="diapers-json-tab" class="json-tab-button">Diapers</button>
                         <button id="pumps-json-tab" class="json-tab-button">Pumps</button>
+                        <button id="sleep-json-tab" class="json-tab-button">Sleep</button>
                     </div>
                     <div style="position: relative;">
                         <button id="copy-json" class="copy-json-button" style="display: none;"
