@@ -50,6 +50,7 @@ let lastPeeTimerInterval: number | null = null;
 let lastPooTimerInterval: number | null = null;
 let lastPumpTimerInterval: number | null = null;
 let timeAwakeTimerInterval: number | null = null;
+let napTimeTimerInterval: number | null = null;
 let vitaminDDateCheckInterval: number | null = null;
 let dataChart: any = null;
 let weeklyViewVersion = 0;
@@ -992,6 +993,7 @@ async function handleSubmitEntry(): Promise<void> {
                 await updateLastPumpTime();
             } else if (entry.type === 'Sleep') {
                 await updateLastSleepEndTime();
+                await updateNapTime();
             }
 
             loadWeeklyView();
@@ -2342,12 +2344,14 @@ async function startAllTimers(): Promise<void> {
     if (lastPooTimerInterval) clearInterval(lastPooTimerInterval);
     if (lastPumpTimerInterval) clearInterval(lastPumpTimerInterval);
     if (timeAwakeTimerInterval) clearInterval(timeAwakeTimerInterval);
+    if (napTimeTimerInterval) clearInterval(napTimeTimerInterval);
 
     lastBottleTimerInterval = window.setInterval(() => updateLastBottleDisplay(), 1000);
     lastPeeTimerInterval = window.setInterval(() => updateLastPeeDisplay(), 1000);
     lastPooTimerInterval = window.setInterval(() => updateLastPooDisplay(), 1000);
     lastPumpTimerInterval = window.setInterval(() => updateLastPumpDisplay(), 1000);
     timeAwakeTimerInterval = window.setInterval(() => updateTimeAwakeDisplay(), 1000);
+    napTimeTimerInterval = window.setInterval(() => updateNapTimeDisplay(), 1000);
 }
 
 async function updateAllEventTimes(): Promise<void> {
@@ -2355,7 +2359,8 @@ async function updateAllEventTimes(): Promise<void> {
         updateLastBottleTime(),
         updateLastDiaperTimes(),
         updateLastPumpTime(),
-        updateLastSleepEndTime()
+        updateLastSleepEndTime(),
+        updateNapTime()
     ]);
 }
 
@@ -2637,6 +2642,85 @@ function updateTimeAwakeDisplay(): void {
     if (labelElement) labelElement.textContent = 'Time Awake';
     const lastSleepEndStr = localStorage.getItem('lastSleepEndTime');
     displayElement.textContent = formatTimeDifference(lastSleepEndStr, 'No sleep recorded');
+}
+
+async function updateNapTime(): Promise<void> {
+    try {
+        const now = new Date();
+        const today8am = new Date(now);
+        today8am.setHours(8, 0, 0, 0);
+
+        const q = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Sleep'),
+            where('startTime', '>=', Timestamp.fromDate(today8am)),
+            orderBy('startTime', 'asc')
+        );
+        const snapshot = await getDocs(q);
+
+        let completedMs = 0;
+        let inProgressStartTime: string | null = null;
+
+        snapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            const startTime: Date = data.startTime.toDate();
+
+            // Only count entries that started today after 8am
+            if (startTime >= today8am && startTime.toDateString() === now.toDateString()) {
+                if (data.endTime) {
+                    const endTime: Date = data.endTime.toDate();
+                    completedMs += endTime.getTime() - startTime.getTime();
+                } else {
+                    // Nap in progress
+                    inProgressStartTime = startTime.toISOString();
+                }
+            }
+        });
+
+        localStorage.setItem('napTimeCompletedMs', String(completedMs));
+        if (inProgressStartTime) {
+            localStorage.setItem('napTimeInProgressStart', inProgressStartTime);
+        } else {
+            localStorage.removeItem('napTimeInProgressStart');
+        }
+
+        updateNapTimeDisplay();
+    } catch (error) {
+        console.error('Error fetching nap time:', error);
+    }
+}
+
+function updateNapTimeDisplay(): void {
+    const displayElement = document.getElementById('nap-time-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const completedMs = parseInt(localStorage.getItem('napTimeCompletedMs') || '0', 10);
+    const inProgressStartStr = localStorage.getItem('napTimeInProgressStart');
+
+    let totalMs = completedMs;
+
+    if (inProgressStartStr) {
+        const inProgressStart = new Date(inProgressStartStr);
+        const now = new Date();
+        totalMs += now.getTime() - inProgressStart.getTime();
+    }
+
+    if (totalMs <= 0) {
+        displayElement.textContent = '0m';
+        return;
+    }
+
+    const hours = Math.floor(totalMs / (1000 * 60 * 60));
+    const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+
+    if (hours > 0) {
+        displayElement.textContent = `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        displayElement.textContent = `${minutes}m ${seconds}s`;
+    } else {
+        displayElement.textContent = `${seconds}s`;
+    }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
