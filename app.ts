@@ -1408,7 +1408,7 @@ async function loadTimeline(): Promise<void> {
                             <div class="stat-group-title">Sleep</div>
                             <div class="stat-line">Total sleep: ${sleepHrs}h ${sleepMins}m</div>
                             <div class="stat-line">Number of sleeps: ${summaryStats.sleep.sessions}</div>
-                            <div class="stat-line" style="font-size: 11px; color: #888;">per day: prev day 7pm - next day 7am</div>
+                            <div class="stat-line" style="font-size: 11px; color: #888;">prev day 7pm - next day 7am</div>
                         </div>
                     `;
                 }
