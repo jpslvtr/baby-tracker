@@ -1098,6 +1098,53 @@ async function loadTimeline(): Promise<void> {
 
         const snapshot = await getDocs(q);
 
+        // Fetch prior-evening sleep entries (from 7pm the day before start date)
+        // so the timeline list shows overnight sleep that belongs to the sleep day
+        let priorEveningSleepDocs: { id: string; data: any }[] = [];
+        if (startDateInput) {
+            const [sY, sM, sD] = startDateInput.split('-').map(Number);
+            const priorEveningStart = new Date(sY, sM - 1, sD - 1, 19, 0, 0, 0); // prev day 7pm
+            const priorEveningEnd = new Date(sY, sM - 1, sD, 0, 0, 0, 0); // midnight
+
+            const priorEveningQ = query(
+                collection(db, 'entries'),
+                where('type', '==', 'Sleep'),
+                where('startTime', '>=', Timestamp.fromDate(priorEveningStart)),
+                where('startTime', '<', Timestamp.fromDate(priorEveningEnd)),
+                orderBy('startTime', 'desc')
+            );
+            try {
+                const priorEveningSnap = await getDocs(priorEveningQ);
+                priorEveningSnap.forEach(d => {
+                    priorEveningSleepDocs.push({ id: d.id, data: d.data() });
+                });
+            } catch (e) {
+                console.error('Error fetching prior evening sleep:', e);
+            }
+        }
+
+        // Merge prior evening sleep docs into a combined list for rendering
+        // Build a map of all docs: prior evening sleep first, then main snapshot
+        const allTimelineDocs: { id: string; data: any }[] = [];
+        const seenIds = new Set<string>();
+
+        // Add main snapshot docs
+        snapshot.forEach(docSnapshot => {
+            allTimelineDocs.push({ id: docSnapshot.id, data: docSnapshot.data() });
+            seenIds.add(docSnapshot.id);
+        });
+
+        // Add prior evening sleep docs (avoid duplicates)
+        priorEveningSleepDocs.forEach(d => {
+            if (!seenIds.has(d.id)) {
+                allTimelineDocs.push(d);
+                seenIds.add(d.id);
+            }
+        });
+
+        // Sort all docs by startTime descending
+        allTimelineDocs.sort((a, b) => b.data.startTime.toDate().getTime() - a.data.startTime.toDate().getTime());
+
         const summaryStats = {
             bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
             diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
@@ -1105,15 +1152,13 @@ async function loadTimeline(): Promise<void> {
             sleep: { totalMs: 0, sessions: 0 }
         };
 
-        if (snapshot.empty) {
+        if (allTimelineDocs.length === 0) {
             timelineList.innerHTML = '<p>No entries found.</p>';
         } else {
             let currentDate = '';
             let hasVisibleEntries = false;
 
-            snapshot.forEach(docSnapshot => {
-                const data = docSnapshot.data();
-                const docId = docSnapshot.id;
+            allTimelineDocs.forEach(({ id: docId, data }) => {
 
                 if (typeFilter !== 'all') {
                     let entryType = '';
@@ -1235,8 +1280,8 @@ async function loadTimeline(): Promise<void> {
                     const currentTime = startTime.getTime();
                     const allPooEntries: { time: number }[] = [];
 
-                    snapshot.forEach(d => {
-                        const entryData = d.data();
+                    allTimelineDocs.forEach(d => {
+                        const entryData = d.data;
                         if (entryData.type === 'Diaper' && (entryData.diaperType === 'Poo' || entryData.diaperType === 'Mixed')) {
                             allPooEntries.push({ time: entryData.startTime.toDate().getTime() });
                         }
@@ -1323,8 +1368,8 @@ async function loadTimeline(): Promise<void> {
                     let sleepDayTotalMs = 0;
                     if (startDateInput && endDateInput) {
                         const sleepEntries: { startTime: Date; endTime: Date | null }[] = [];
-                        snapshot.forEach(d => {
-                            const sData = d.data();
+                        allTimelineDocs.forEach(d => {
+                            const sData = d.data;
                             if (sData.type === 'Sleep') {
                                 sleepEntries.push({
                                     startTime: sData.startTime.toDate(),
