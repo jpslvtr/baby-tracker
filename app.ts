@@ -571,7 +571,7 @@ function handleEntryTypeChange(event: Event): void {
 
     const sleepEndTime = document.getElementById('sleep-end-time') as HTMLInputElement | null;
     if (sleepEndTime) {
-        sleepEndTime.value = '';
+        sleepEndTime.value = formatDateTime(new Date());
     }
 }
 
@@ -2156,7 +2156,7 @@ function openEditModal(docId: string, data: any): void {
         if (data.endTime) {
             (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(data.endTime.toDate());
         } else {
-            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = '';
+            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(new Date());
         }
         (document.getElementById('edit-sleep-notes') as HTMLTextAreaElement).value = data.notes || '';
     }
@@ -2602,11 +2602,15 @@ async function updateLastSleepEndTime(): Promise<void> {
             const data = snapshot.docs[0].data();
             if (data.endTime) {
                 localStorage.setItem('lastSleepEndTime', data.endTime.toDate().toISOString());
+                localStorage.removeItem('sleepInProgressStart');
             } else {
+                // Sleep is in progress - store the start time
                 localStorage.removeItem('lastSleepEndTime');
+                localStorage.setItem('sleepInProgressStart', data.startTime.toDate().toISOString());
             }
         } else {
             localStorage.removeItem('lastSleepEndTime');
+            localStorage.removeItem('sleepInProgressStart');
         }
 
         updateTimeAwakeDisplay();
@@ -2617,8 +2621,20 @@ async function updateLastSleepEndTime(): Promise<void> {
 
 function updateTimeAwakeDisplay(): void {
     const displayElement = document.getElementById('time-awake-value') as HTMLElement;
+    const labelElement = document.getElementById('time-awake-label') as HTMLElement;
     if (!displayElement) return;
 
+    const sleepInProgressStr = localStorage.getItem('sleepInProgressStart');
+
+    if (sleepInProgressStr) {
+        // Sleep is in progress - show "Time Asleep" with running counter
+        if (labelElement) labelElement.textContent = 'Time Asleep';
+        displayElement.textContent = formatTimeDifference(sleepInProgressStr, 'No sleep recorded');
+        return;
+    }
+
+    // Not sleeping - show "Time Awake"
+    if (labelElement) labelElement.textContent = 'Time Awake';
     const lastSleepEndStr = localStorage.getItem('lastSleepEndTime');
     displayElement.textContent = formatTimeDifference(lastSleepEndStr, 'No sleep recorded');
 }
