@@ -1174,11 +1174,6 @@ async function loadTimeline(): Promise<void> {
                     summaryStats.pumps.sessions++;
                 } else if (data.type === 'Sleep') {
                     summaryStats.sleep.sessions++;
-                    if (data.endTime) {
-                        const start = data.startTime.toDate().getTime();
-                        const end = data.endTime.toDate().getTime();
-                        summaryStats.sleep.totalMs += (end - start);
-                    }
                 }
 
                 hasVisibleEntries = true;
@@ -1324,13 +1319,96 @@ async function loadTimeline(): Promise<void> {
                 }
 
                 if (typeFilter === 'all' || typeFilter === 'sleep') {
-                    const sleepHrs = Math.floor(summaryStats.sleep.totalMs / (1000 * 60 * 60));
-                    const sleepMins = Math.floor((summaryStats.sleep.totalMs % (1000 * 60 * 60)) / (1000 * 60));
+                    // Compute sleep using sleep day bounds (prev day 7pm - next day 7am)
+                    let sleepDayTotalMs = 0;
+                    if (startDateInput && endDateInput) {
+                        const sleepEntries: { startTime: Date; endTime: Date | null }[] = [];
+                        snapshot.forEach(d => {
+                            const sData = d.data();
+                            if (sData.type === 'Sleep') {
+                                sleepEntries.push({
+                                    startTime: sData.startTime.toDate(),
+                                    endTime: sData.endTime ? sData.endTime.toDate() : null
+                                });
+                            }
+                        });
+
+                        // Fetch prior-night sleep entries for first day's bounds
+                        const [sY, sM, sD] = startDateInput.split('-').map(Number);
+                        const priorDay = new Date(sY, sM - 1, sD);
+                        priorDay.setDate(priorDay.getDate() - 1);
+                        const priorStart = new Date(priorDay);
+                        priorStart.setHours(0, 0, 0, 0);
+                        const priorEnd = new Date(priorDay);
+                        priorEnd.setHours(23, 59, 59, 999);
+
+                        try {
+                            const priorQ = query(
+                                collection(db, 'entries'),
+                                where('type', '==', 'Sleep'),
+                                where('startTime', '>=', Timestamp.fromDate(priorStart)),
+                                where('startTime', '<=', Timestamp.fromDate(priorEnd)),
+                                orderBy('startTime', 'asc')
+                            );
+                            const priorSnap = await getDocs(priorQ);
+                            priorSnap.forEach(d => {
+                                const sData = d.data();
+                                sleepEntries.push({
+                                    startTime: sData.startTime.toDate(),
+                                    endTime: sData.endTime ? sData.endTime.toDate() : null
+                                });
+                            });
+                        } catch (e) {
+                            console.error('Error fetching prior sleep entries:', e);
+                        }
+
+                        // Fetch post-day sleep entries for last day's bounds
+                        const [eY, eM, eD] = endDateInput.split('-').map(Number);
+                        const postDay = new Date(eY, eM - 1, eD);
+                        postDay.setDate(postDay.getDate() + 1);
+                        const postStart = new Date(postDay);
+                        postStart.setHours(0, 0, 0, 0);
+                        const postEnd = new Date(postDay);
+                        postEnd.setHours(23, 59, 59, 999);
+
+                        try {
+                            const postQ = query(
+                                collection(db, 'entries'),
+                                where('type', '==', 'Sleep'),
+                                where('startTime', '>=', Timestamp.fromDate(postStart)),
+                                where('startTime', '<=', Timestamp.fromDate(postEnd)),
+                                orderBy('startTime', 'asc')
+                            );
+                            const postSnap = await getDocs(postQ);
+                            postSnap.forEach(d => {
+                                const sData = d.data();
+                                sleepEntries.push({
+                                    startTime: sData.startTime.toDate(),
+                                    endTime: sData.endTime ? sData.endTime.toDate() : null
+                                });
+                            });
+                        } catch (e) {
+                            console.error('Error fetching post sleep entries:', e);
+                        }
+
+                        const filterStart = new Date(sY, sM - 1, sD);
+                        const filterEnd = new Date(eY, eM - 1, eD);
+                        const currentDay = new Date(filterStart);
+                        while (currentDay <= filterEnd) {
+                            const bounds = getSleepDayBounds(currentDay);
+                            sleepDayTotalMs += computeDaySleepMs(sleepEntries, bounds.start, bounds.end);
+                            currentDay.setDate(currentDay.getDate() + 1);
+                        }
+                    }
+
+                    const sleepHrs = Math.floor(sleepDayTotalMs / (1000 * 60 * 60));
+                    const sleepMins = Math.floor((sleepDayTotalMs % (1000 * 60 * 60)) / (1000 * 60));
                     summaryHTML += `
                         <div class="stat-group">
                             <div class="stat-group-title">Sleep</div>
                             <div class="stat-line">Total sleep: ${sleepHrs}h ${sleepMins}m</div>
                             <div class="stat-line">Number of sleeps: ${summaryStats.sleep.sessions}</div>
+                            <div class="stat-line" style="font-size: 11px; color: #888;">per day: prev day 7pm - next day 7am</div>
                         </div>
                     `;
                 }
@@ -1362,6 +1440,24 @@ function computeDaySleepMs(sleepEntries: { startTime: Date; endTime: Date | null
         }
     }
     return totalMs;
+}
+
+// For a given date, a "sleep day" spans from the previous day at 7pm
+// to the next day at 7am. Sleep sessions are clamped to this window.
+// Example: Saturday's sleep day = Friday 7pm → Sunday 7am.
+function getSleepDayBounds(date: Date): { start: Date; end: Date } {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+
+    const start = new Date(d);
+    start.setDate(start.getDate() - 1);
+    start.setHours(19, 0, 0, 0); // previous day 7pm
+
+    const end = new Date(d);
+    end.setDate(end.getDate() + 1);
+    end.setHours(7, 0, 0, 0); // next day 7am
+
+    return { start, end };
 }
 
 function formatSleepDuration(ms: number): string {
@@ -1467,7 +1563,7 @@ async function loadWeeklyView(): Promise<void> {
         // If a newer loadWeeklyView call started, abandon this one
         if (thisVersion !== weeklyViewVersion) return;
 
-        // Collect all sleep entries for cross-day sleep calculation
+        // Collect all sleep entries for sleep day calculation
         const allSleepEntries: { startTime: Date; endTime: Date | null }[] = [];
         snapshot.forEach(docSnapshot => {
             const data = docSnapshot.data();
@@ -1479,6 +1575,57 @@ async function loadWeeklyView(): Promise<void> {
             }
         });
 
+        // Fetch sleep entries from the day before the week (prev night for first day's sleep day)
+        const priorSleepStart = new Date(currentWeekStart);
+        priorSleepStart.setDate(priorSleepStart.getDate() - 1);
+        priorSleepStart.setHours(0, 0, 0, 0);
+        const priorSleepEnd = new Date(currentWeekStart);
+        priorSleepEnd.setHours(0, 0, 0, 0);
+
+        const priorSleepQuery = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Sleep'),
+            where('startTime', '>=', Timestamp.fromDate(priorSleepStart)),
+            where('startTime', '<', Timestamp.fromDate(priorSleepEnd)),
+            orderBy('startTime', 'asc')
+        );
+        const priorSleepSnapshot = await getDocs(priorSleepQuery);
+        if (thisVersion !== weeklyViewVersion) return;
+
+        priorSleepSnapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            allSleepEntries.push({
+                startTime: data.startTime.toDate(),
+                endTime: data.endTime ? data.endTime.toDate() : null
+            });
+        });
+
+        // Fetch sleep entries from the day after the week (for last day's sleep day bounds)
+        const postSleepStart = new Date(weekEnd);
+        postSleepStart.setDate(postSleepStart.getDate() + 1);
+        postSleepStart.setHours(0, 0, 0, 0);
+        const postSleepEnd = new Date(postSleepStart);
+        postSleepEnd.setDate(postSleepEnd.getDate() + 1);
+        postSleepEnd.setHours(0, 0, 0, 0);
+
+        const postSleepQuery = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Sleep'),
+            where('startTime', '>=', Timestamp.fromDate(postSleepStart)),
+            where('startTime', '<', Timestamp.fromDate(postSleepEnd)),
+            orderBy('startTime', 'asc')
+        );
+        const postSleepSnapshot = await getDocs(postSleepQuery);
+        if (thisVersion !== weeklyViewVersion) return;
+
+        postSleepSnapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            allSleepEntries.push({
+                startTime: data.startTime.toDate(),
+                endTime: data.endTime ? data.endTime.toDate() : null
+            });
+        });
+
         const dayStats: { [key: string]: any } = {};
 
         for (let i = 0; i < 7; i++) {
@@ -1488,10 +1635,7 @@ async function loadWeeklyView(): Promise<void> {
             const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
             const dateKeyFormatted = getDateKey(date);
 
-            const dayStart = new Date(date);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(date);
-            dayEnd.setHours(23, 59, 59, 999);
+            const sleepBounds = getSleepDayBounds(date);
 
             dayStats[dateKey] = {
                 date: new Date(date),
@@ -1499,7 +1643,7 @@ async function loadWeeklyView(): Promise<void> {
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
                 pumps: { total: 0, sessions: 0 },
-                sleepMs: computeDaySleepMs(allSleepEntries, dayStart, dayEnd)
+                sleepMs: computeDaySleepMs(allSleepEntries, sleepBounds.start, sleepBounds.end)
             };
         }
 
@@ -1602,6 +1746,7 @@ async function loadWeeklyView(): Promise<void> {
                 <div class="stat-group">
                     <div class="stat-group-title">Sleep</div>
                     <div class="stat-line">Total: ${formatSleepDuration(stats.sleepMs)}</div>
+                    <div class="stat-line" style="font-size: 11px; color: #888;">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(stats.date.getDay() + 6) % 7]} 7pm - ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(stats.date.getDay() + 1) % 7]} 7am</div>
                 </div>
             `;
 
@@ -1830,6 +1975,39 @@ async function updateGraph(): Promise<void> {
 
     const snapshot = await getDocs(q);
 
+    // Fetch sleep from day before start date (for first day's sleep day bounds)
+    const graphPriorStart = new Date(startDate);
+    graphPriorStart.setDate(graphPriorStart.getDate() - 1);
+    graphPriorStart.setHours(0, 0, 0, 0);
+    const graphPriorEnd = new Date(startDate);
+    graphPriorEnd.setHours(0, 0, 0, 0);
+
+    const graphPriorSleepQ = query(
+        collection(db, 'entries'),
+        where('type', '==', 'Sleep'),
+        where('startTime', '>=', Timestamp.fromDate(graphPriorStart)),
+        where('startTime', '<', Timestamp.fromDate(graphPriorEnd)),
+        orderBy('startTime', 'asc')
+    );
+    const graphPriorSleepSnap = await getDocs(graphPriorSleepQ);
+
+    // Fetch sleep from day after end date (for last day's sleep day bounds)
+    const graphPostStart = new Date(endDate);
+    graphPostStart.setDate(graphPostStart.getDate() + 1);
+    graphPostStart.setHours(0, 0, 0, 0);
+    const graphPostEnd = new Date(graphPostStart);
+    graphPostEnd.setDate(graphPostEnd.getDate() + 1);
+    graphPostEnd.setHours(0, 0, 0, 0);
+
+    const graphPostSleepQ = query(
+        collection(db, 'entries'),
+        where('type', '==', 'Sleep'),
+        where('startTime', '>=', Timestamp.fromDate(graphPostStart)),
+        where('startTime', '<', Timestamp.fromDate(graphPostEnd)),
+        orderBy('startTime', 'asc')
+    );
+    const graphPostSleepSnap = await getDocs(graphPostSleepQ);
+
     const dateMap: { [key: string]: { [key: string]: number } } = {};
 
     const currentDate = new Date(startDate);
@@ -1891,13 +2069,29 @@ async function updateGraph(): Promise<void> {
         }
     });
 
-    // Compute sleep hours per day using midnight-to-midnight clamping
+    // Add prior-day and post-day sleep entries for boundary accuracy
+    graphPriorSleepSnap.forEach(d => {
+        const data = d.data();
+        allSleepEntries.push({
+            startTime: data.startTime.toDate(),
+            endTime: data.endTime ? data.endTime.toDate() : null
+        });
+    });
+    graphPostSleepSnap.forEach(d => {
+        const data = d.data();
+        allSleepEntries.push({
+            startTime: data.startTime.toDate(),
+            endTime: data.endTime ? data.endTime.toDate() : null
+        });
+    });
+
+    // Compute sleep hours per day using sleep day bounds (prev day 7pm - next day 7am)
     if (selectedSeries.includes('sleep')) {
         for (const dateKey of Object.keys(dateMap)) {
             const [y, m, d] = dateKey.split('-').map(Number);
-            const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
-            const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
-            const ms = computeDaySleepMs(allSleepEntries, dayStart, dayEnd);
+            const dayDate = new Date(y, m - 1, d);
+            const bounds = getSleepDayBounds(dayDate);
+            const ms = computeDaySleepMs(allSleepEntries, bounds.start, bounds.end);
             dateMap[dateKey]['sleep'] = parseFloat((ms / (1000 * 60 * 60)).toFixed(1));
         }
     }
@@ -1926,7 +2120,7 @@ async function updateGraph(): Promise<void> {
         'diaper-mixed': 'Diaper - Mixed',
         'diaper-all': 'Diaper - All',
         'pump': 'Pump',
-        'sleep': 'Sleep (hours)'
+        'sleep': 'Sleep (hrs, 7pm-7am)'
     };
 
     selectedSeries.forEach(series => {
@@ -2647,13 +2841,13 @@ function updateTimeAwakeDisplay(): void {
 async function updateNapTime(): Promise<void> {
     try {
         const now = new Date();
-        const today8am = new Date(now);
-        today8am.setHours(8, 0, 0, 0);
+        const today7am = new Date(now);
+        today7am.setHours(7, 0, 0, 0);
 
         const q = query(
             collection(db, 'entries'),
             where('type', '==', 'Sleep'),
-            where('startTime', '>=', Timestamp.fromDate(today8am)),
+            where('startTime', '>=', Timestamp.fromDate(today7am)),
             orderBy('startTime', 'asc')
         );
         const snapshot = await getDocs(q);
@@ -2666,7 +2860,7 @@ async function updateNapTime(): Promise<void> {
             const startTime: Date = data.startTime.toDate();
 
             // Only count entries that started today after 8am
-            if (startTime >= today8am && startTime.toDateString() === now.toDateString()) {
+            if (startTime >= today7am && startTime.toDateString() === now.toDateString()) {
                 if (data.endTime) {
                     const endTime: Date = data.endTime.toDate();
                     completedMs += endTime.getTime() - startTime.getTime();

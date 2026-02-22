@@ -45,7 +45,7 @@
                         <div id="time-awake-value" class="timer-value">Loading...</div>
                     </div>
                     <div class="timer-item">
-                        <div class="timer-label">Nap Time (8am+)</div>
+                        <div class="timer-label">Nap Time (7am+)</div>
                         <div id="nap-time-value" class="timer-value">Loading...</div>
                     </div>
                     <div class="timer-item">
@@ -200,9 +200,10 @@
                         <option value="pump">Pump</option>
                         <option value="sleep">Sleep</option>
                     </select>
-                </div>
-
-                <div id="timeline-loading">Loading...</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 6px;">Sleep per day: prev day 7pm - next day 7am</div>
+                    </div>
+                    
+                    <div id="timeline-loading">Loading...</div>
                 <div id="timeline-list"></div>
             </div>
         </div>
@@ -323,7 +324,7 @@
                                 All</label>
                             <label><input type="checkbox" class="graph-checkbox" data-series="pump" /> Pump</label>
                             <label><input type="checkbox" class="graph-checkbox" data-series="sleep" /> Sleep
-                                (hours)</label>
+                                (hrs, 7pm-7am)</label>
                         </div>
                         <button id="update-graph-btn" class="update-graph-btn">Update Graph</button>
                     </div>
