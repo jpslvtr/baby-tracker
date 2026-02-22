@@ -525,6 +525,34 @@ function setDefaultTimes(): void {
     }
 }
 
+async function checkOngoingSleep(): Promise<void> {
+    const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
+    const statusDiv = document.getElementById('submit-status') as HTMLDivElement;
+
+    try {
+        const q = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Sleep'),
+            orderBy('startTime', 'desc'),
+            limit(1)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+            const data = snapshot.docs[0].data();
+            if (!data.endTime) {
+                const startTime = data.startTime.toDate();
+                submitButton.style.display = 'none';
+                statusDiv.className = 'error';
+                statusDiv.textContent = `Sleep entry ongoing since ${formatDisplayDateTime(startTime)}. End that entry before adding a new one.`;
+                statusDiv.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.error('Error checking ongoing sleep:', error);
+    }
+}
+
 function handleEntryTypeChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     const value = select.value;
@@ -534,6 +562,7 @@ function handleEntryTypeChange(event: Event): void {
     const pumpFields = document.getElementById('pump-fields') as HTMLElement;
     const sleepFields = document.getElementById('sleep-fields') as HTMLElement;
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
+    const statusDiv = document.getElementById('submit-status') as HTMLDivElement;
     const bottleTypeContainer = document.getElementById('bottle-type-container') as HTMLElement;
 
     bottleFields.style.display = 'none';
@@ -541,6 +570,7 @@ function handleEntryTypeChange(event: Event): void {
     pumpFields.style.display = 'none';
     sleepFields.style.display = 'none';
     bottleTypeContainer.style.display = 'none';
+    statusDiv.style.display = 'none';
 
     if (value === 'bottle-breast-milk' || value === 'bottle-formula') {
         bottleFields.style.display = 'block';
@@ -564,16 +594,14 @@ function handleEntryTypeChange(event: Event): void {
     } else if (value === 'sleep') {
         sleepFields.style.display = 'block';
         submitButton.style.display = 'block';
+        checkOngoingSleep();
     } else {
         submitButton.style.display = 'none';
     }
 
     setDefaultTimes();
 
-    const sleepEndTime = document.getElementById('sleep-end-time') as HTMLInputElement | null;
-    if (sleepEndTime) {
-        sleepEndTime.value = formatDateTime(new Date());
-    }
+    setDefaultTimes();
 }
 
 function handleBottleTypeChange(event: Event): void {
@@ -951,6 +979,21 @@ async function handleSubmitEntry(): Promise<void> {
             const selectedStartTime = new Date(startTimeInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot add entries in the future');
+            }
+
+            // Check for ongoing sleep entry
+            const ongoingQ = query(
+                collection(db, 'entries'),
+                where('type', '==', 'Sleep'),
+                orderBy('startTime', 'desc'),
+                limit(1)
+            );
+            const ongoingSnapshot = await getDocs(ongoingQ);
+            if (!ongoingSnapshot.empty) {
+                const latestSleep = ongoingSnapshot.docs[0].data();
+                if (!latestSleep.endTime) {
+                    throw new Error('A sleep entry is already ongoing. End that entry before adding a new one.');
+                }
             }
 
             let selectedEndTime: Date | undefined = undefined;
