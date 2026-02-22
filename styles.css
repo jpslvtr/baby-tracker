@@ -851,6 +851,10 @@ button:active {
     border-radius: 4px;
 }
 
+.timer-item-wide {
+    grid-column: 1 / -1;
+}
+
 .timer-label {
     font-weight: bold;
     font-size: 12px;

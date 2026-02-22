@@ -49,8 +49,10 @@ let lastBottleTimerInterval: number | null = null;
 let lastPeeTimerInterval: number | null = null;
 let lastPooTimerInterval: number | null = null;
 let lastPumpTimerInterval: number | null = null;
+let timeAwakeTimerInterval: number | null = null;
 let vitaminDDateCheckInterval: number | null = null;
 let dataChart: any = null;
+let weeklyViewVersion = 0;
 
 function getWeekStart(date: Date): Date {
     const d = new Date(date);
@@ -375,6 +377,28 @@ function attachTimeValidation(inputId: string): void {
     });
 }
 
+function switchTab(tab: string): void {
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(view => (view as HTMLElement).style.display = 'none');
+
+    if (tab === 'entry') {
+        document.getElementById('entry-tab')?.classList.add('active');
+        (document.getElementById('entry-view') as HTMLElement).style.display = 'block';
+        loadVitaminDStatus();
+    } else if (tab === 'timeline') {
+        document.getElementById('timeline-tab')?.classList.add('active');
+        (document.getElementById('timeline-view') as HTMLElement).style.display = 'block';
+        loadWeeklyView();
+        loadTimeline();
+    } else if (tab === 'weekly') {
+        document.getElementById('weekly-tab')?.classList.add('active');
+        (document.getElementById('weekly-view') as HTMLElement).style.display = 'block';
+        loadWeeklyView();
+    }
+
+    window.scrollTo(0, 0);
+}
+
 function setupEventListeners(): void {
     const entryTypeSelect = document.getElementById('entry-type') as HTMLSelectElement;
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
@@ -437,7 +461,7 @@ function setupEventListeners(): void {
     const startDateFilter = document.getElementById('start-date-filter') as HTMLInputElement;
     const endDateFilter = document.getElementById('end-date-filter') as HTMLInputElement;
     const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
-    
+
     const todayButton = document.getElementById('today-button') as HTMLButtonElement;
     const yesterdayButton = document.getElementById('yesterday-button') as HTMLButtonElement;
     const twoDaysAgoButton = document.getElementById('two-days-ago-button') as HTMLButtonElement;
@@ -447,19 +471,21 @@ function setupEventListeners(): void {
     startDateFilter.addEventListener('change', () => loadTimeline());
     endDateFilter.addEventListener('change', () => loadTimeline());
     typeFilter.addEventListener('change', () => loadTimeline());
-    
+
     todayButton.addEventListener('click', () => handleQuickFilter('today'));
     yesterdayButton.addEventListener('click', () => handleQuickFilter('yesterday'));
     twoDaysAgoButton.addEventListener('click', () => handleQuickFilter('two-days-ago'));
     threeDaysAgoButton.addEventListener('click', () => handleQuickFilter('three-days-ago'));
     allTimeButton.addEventListener('click', () => handleQuickFilter('all-time'));
-    
+
     attachTimeValidation('bottle-time');
     attachTimeValidation('diaper-time');
     attachTimeValidation('pump-start-time');
+    attachTimeValidation('sleep-start-time');
     attachTimeValidation('edit-bottle-time');
     attachTimeValidation('edit-diaper-time');
     attachTimeValidation('edit-pump-start-time');
+    attachTimeValidation('edit-sleep-start-time');
 
     const graphStartDate = document.getElementById('graph-start-date') as HTMLInputElement;
     const graphEndDate = document.getElementById('graph-end-date') as HTMLInputElement;
@@ -482,6 +508,7 @@ function setDefaultTimes(): void {
     const bottleTime = document.getElementById('bottle-time') as HTMLInputElement | null;
     const diaperTime = document.getElementById('diaper-time') as HTMLInputElement | null;
     const pumpStartTime = document.getElementById('pump-start-time') as HTMLInputElement | null;
+    const sleepStartTime = document.getElementById('sleep-start-time') as HTMLInputElement | null;
 
     if (bottleTime) {
         bottleTime.value = formatted;
@@ -492,6 +519,9 @@ function setDefaultTimes(): void {
     if (pumpStartTime) {
         pumpStartTime.value = formatted;
     }
+    if (sleepStartTime) {
+        sleepStartTime.value = formatted;
+    }
 }
 
 function handleEntryTypeChange(event: Event): void {
@@ -501,12 +531,14 @@ function handleEntryTypeChange(event: Event): void {
     const bottleFields = document.getElementById('bottle-fields') as HTMLElement;
     const diaperFields = document.getElementById('diaper-fields') as HTMLElement;
     const pumpFields = document.getElementById('pump-fields') as HTMLElement;
+    const sleepFields = document.getElementById('sleep-fields') as HTMLElement;
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
     const bottleTypeContainer = document.getElementById('bottle-type-container') as HTMLElement;
 
     bottleFields.style.display = 'none';
     diaperFields.style.display = 'none';
     pumpFields.style.display = 'none';
+    sleepFields.style.display = 'none';
     bottleTypeContainer.style.display = 'none';
 
     if (value === 'bottle-breast-milk' || value === 'bottle-formula') {
@@ -528,11 +560,19 @@ function handleEntryTypeChange(event: Event): void {
         const pumpUnit = document.getElementById('pump-unit') as HTMLSelectElement;
         const pumpAmount = document.getElementById('pump-amount') as HTMLInputElement;
         pumpAmount.dataset.lastUnit = pumpUnit.value;
+    } else if (value === 'sleep') {
+        sleepFields.style.display = 'block';
+        submitButton.style.display = 'block';
     } else {
         submitButton.style.display = 'none';
     }
 
     setDefaultTimes();
+
+    const sleepEndTime = document.getElementById('sleep-end-time') as HTMLInputElement | null;
+    if (sleepEndTime) {
+        sleepEndTime.value = '';
+    }
 }
 
 function handleBottleTypeChange(event: Event): void {
@@ -898,6 +938,37 @@ async function handleSubmitEntry(): Promise<void> {
                 unit: unit,
                 notes: notes
             };
+        } else if (entryType === 'sleep') {
+            const startTimeInput = document.getElementById('sleep-start-time') as HTMLInputElement;
+            const endTimeInput = document.getElementById('sleep-end-time') as HTMLInputElement;
+            const notes = (document.getElementById('sleep-notes') as HTMLTextAreaElement).value;
+
+            if (!startTimeInput.value) {
+                throw new Error('Start time is required');
+            }
+
+            const selectedStartTime = new Date(startTimeInput.value);
+            if (selectedStartTime > now) {
+                throw new Error('Cannot add entries in the future');
+            }
+
+            let selectedEndTime: Date | undefined = undefined;
+            if (endTimeInput.value) {
+                selectedEndTime = new Date(endTimeInput.value);
+                if (selectedEndTime > now) {
+                    throw new Error('End time cannot be in the future');
+                }
+                if (selectedEndTime <= selectedStartTime) {
+                    throw new Error('End time must be after start time');
+                }
+            }
+
+            entry = {
+                type: 'Sleep',
+                startTime: selectedStartTime,
+                endTime: selectedEndTime,
+                notes: notes
+            };
         }
 
         if (entry) {
@@ -919,7 +990,11 @@ async function handleSubmitEntry(): Promise<void> {
                 await updateLastDiaperTimes();
             } else if (entry.type === 'Pump') {
                 await updateLastPumpTime();
+            } else if (entry.type === 'Sleep') {
+                await updateLastSleepEndTime();
             }
+
+            loadWeeklyView();
 
             setTimeout(() => {
                 statusDiv.style.display = 'none';
@@ -940,36 +1015,17 @@ function clearForm(): void {
     (document.getElementById('diaper-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('pump-amount') as HTMLInputElement).value = '';
     (document.getElementById('pump-notes') as HTMLTextAreaElement).value = '';
+    (document.getElementById('sleep-end-time') as HTMLInputElement).value = '';
+    (document.getElementById('sleep-notes') as HTMLTextAreaElement).value = '';
 
     (document.getElementById('bottle-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('bottle-type-container') as HTMLElement).style.display = 'none';
     (document.getElementById('diaper-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('pump-fields') as HTMLElement).style.display = 'none';
+    (document.getElementById('sleep-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('submit-entry') as HTMLButtonElement).style.display = 'none';
 
     setDefaultTimes();
-}
-
-function switchTab(tab: string): void {
-    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(view => (view as HTMLElement).style.display = 'none');
-
-    if (tab === 'entry') {
-        document.getElementById('entry-tab')?.classList.add('active');
-        (document.getElementById('entry-view') as HTMLElement).style.display = 'block';
-        loadVitaminDStatus();
-    } else if (tab === 'timeline') {
-        document.getElementById('timeline-tab')?.classList.add('active');
-        (document.getElementById('timeline-view') as HTMLElement).style.display = 'block';
-        loadWeeklyView();
-        loadTimeline();
-    } else if (tab === 'weekly') {
-        document.getElementById('weekly-tab')?.classList.add('active');
-        (document.getElementById('weekly-view') as HTMLElement).style.display = 'block';
-        loadWeeklyView();
-    }
-
-    window.scrollTo(0, 0);
 }
 
 function handleQuickFilter(filterType: string): void {
@@ -1043,7 +1099,8 @@ async function loadTimeline(): Promise<void> {
         const summaryStats = {
             bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
             diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
-            pumps: { total: 0, sessions: 0 }
+            pumps: { total: 0, sessions: 0 },
+            sleep: { totalMs: 0, sessions: 0 }
         };
 
         if (snapshot.empty) {
@@ -1066,6 +1123,8 @@ async function loadTimeline(): Promise<void> {
                         entryType = 'diaper-all';
                     } else if (data.type === 'Pump') {
                         entryType = 'pump';
+                    } else if (data.type === 'Sleep') {
+                        entryType = 'sleep';
                     }
 
                     if (typeFilter === 'bottle-all') {
@@ -1111,6 +1170,13 @@ async function loadTimeline(): Promise<void> {
                     const amount = convertToOz(data.amount, data.unit);
                     summaryStats.pumps.total += amount;
                     summaryStats.pumps.sessions++;
+                } else if (data.type === 'Sleep') {
+                    summaryStats.sleep.sessions++;
+                    if (data.endTime) {
+                        const start = data.startTime.toDate().getTime();
+                        const end = data.endTime.toDate().getTime();
+                        summaryStats.sleep.totalMs += (end - start);
+                    }
                 }
 
                 hasVisibleEntries = true;
@@ -1146,6 +1212,20 @@ async function loadTimeline(): Promise<void> {
                 } else if (data.type === 'Pump') {
                     detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}</div>`;
                     backgroundColor = '#e2daf2';
+                } else if (data.type === 'Sleep') {
+                    typeDisplay = 'Sleep';
+                    backgroundColor = '#d4e8d4';
+                    if (data.endTime) {
+                        const sleepStart = data.startTime.toDate();
+                        const sleepEnd = data.endTime.toDate();
+                        const durationMs = sleepEnd.getTime() - sleepStart.getTime();
+                        const durationHrs = Math.floor(durationMs / (1000 * 60 * 60));
+                        const durationMins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+                        detailsHTML = `<div class="timeline-entry-details">Duration: ${durationHrs}h ${durationMins}m</div>`;
+                        detailsHTML += `<div class="timeline-entry-details">End: ${formatDisplayDateTime(sleepEnd)}</div>`;
+                    } else {
+                        detailsHTML = `<div class="timeline-entry-details">In progress</div>`;
+                    }
                 }
 
                 entry.style.backgroundColor = backgroundColor;
@@ -1241,6 +1321,18 @@ async function loadTimeline(): Promise<void> {
                     `;
                 }
 
+                if (typeFilter === 'all' || typeFilter === 'sleep') {
+                    const sleepHrs = Math.floor(summaryStats.sleep.totalMs / (1000 * 60 * 60));
+                    const sleepMins = Math.floor((summaryStats.sleep.totalMs % (1000 * 60 * 60)) / (1000 * 60));
+                    summaryHTML += `
+                        <div class="stat-group">
+                            <div class="stat-group-title">Sleep</div>
+                            <div class="stat-line">Total sleep: ${sleepHrs}h ${sleepMins}m</div>
+                            <div class="stat-line">Number of naps: ${summaryStats.sleep.sessions}</div>
+                        </div>
+                    `;
+                }
+
                 summaryHTML += '</div>';
                 summaryDiv.innerHTML = summaryHTML;
 
@@ -1257,7 +1349,27 @@ async function loadTimeline(): Promise<void> {
     }
 }
 
+function computeDaySleepMs(sleepEntries: { startTime: Date; endTime: Date | null }[], dayStart: Date, dayEnd: Date): number {
+    let totalMs = 0;
+    for (const entry of sleepEntries) {
+        if (!entry.endTime) continue;
+        const clampedStart = Math.max(entry.startTime.getTime(), dayStart.getTime());
+        const clampedEnd = Math.min(entry.endTime.getTime(), dayEnd.getTime());
+        if (clampedEnd > clampedStart) {
+            totalMs += (clampedEnd - clampedStart);
+        }
+    }
+    return totalMs;
+}
+
+function formatSleepDuration(ms: number): string {
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+}
+
 async function loadWeeklyView(): Promise<void> {
+    const thisVersion = ++weeklyViewVersion;
     const weeklyStats = document.getElementById('weekly-stats') as HTMLDivElement;
     const loadingDiv = document.getElementById('weekly-loading') as HTMLDivElement;
     const weekRange = document.getElementById('week-range') as HTMLSpanElement;
@@ -1319,6 +1431,9 @@ async function loadWeeklyView(): Promise<void> {
         );
         const snapshot = await getDocs(q);
 
+        // If a newer loadWeeklyView call started, abandon this one
+        if (thisVersion !== weeklyViewVersion) return;
+
         const vitaminDStartDate = new Date('2025-11-11');
         vitaminDStartDate.setHours(0, 0, 0, 0);
 
@@ -1347,6 +1462,21 @@ async function loadWeeklyView(): Promise<void> {
             });
         }
 
+        // If a newer loadWeeklyView call started, abandon this one
+        if (thisVersion !== weeklyViewVersion) return;
+
+        // Collect all sleep entries for cross-day sleep calculation
+        const allSleepEntries: { startTime: Date; endTime: Date | null }[] = [];
+        snapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            if (data.type === 'Sleep') {
+                allSleepEntries.push({
+                    startTime: data.startTime.toDate(),
+                    endTime: data.endTime ? data.endTime.toDate() : null
+                });
+            }
+        });
+
         const dayStats: { [key: string]: any } = {};
 
         for (let i = 0; i < 7; i++) {
@@ -1356,12 +1486,18 @@ async function loadWeeklyView(): Promise<void> {
             const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
             const dateKeyFormatted = getDateKey(date);
 
+            const dayStart = new Date(date);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(date);
+            dayEnd.setHours(23, 59, 59, 999);
+
             dayStats[dateKey] = {
                 date: new Date(date),
                 vitaminD: date >= vitaminDStartDate ? (vitaminDMap[dateKeyFormatted] === true) : null,
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
-                pumps: { total: 0, sessions: 0 }
+                pumps: { total: 0, sessions: 0 },
+                sleepMs: computeDaySleepMs(allSleepEntries, dayStart, dayEnd)
             };
         }
 
@@ -1398,6 +1534,7 @@ async function loadWeeklyView(): Promise<void> {
                     dayStats[dateKey].pumps.total += amount;
                     dayStats[dateKey].pumps.sessions++;
                 }
+                // Sleep is already computed via computeDaySleepMs above
             }
         });
 
@@ -1460,6 +1597,10 @@ async function loadWeeklyView(): Promise<void> {
                     <div class="stat-line">Total volume: ${formatBothUnits(stats.pumps.total, 'oz')}</div>
                     <div class="stat-line">Number of sessions: ${stats.pumps.sessions}</div>
                 </div>
+                <div class="stat-group">
+                    <div class="stat-group-title">Sleep</div>
+                    <div class="stat-line">Total: ${formatSleepDuration(stats.sleepMs)}</div>
+                </div>
             `;
 
             weeklyContainer.appendChild(dayDiv);
@@ -1483,10 +1624,14 @@ async function loadWeeklyView(): Promise<void> {
             }, 100);
         }
     } catch (error) {
-        weeklyStats.innerHTML = '<p class="error">Failed to load weekly view</p>';
+        if (thisVersion === weeklyViewVersion) {
+            weeklyStats.innerHTML = '<p class="error">Failed to load weekly view</p>';
+        }
     } finally {
-        loadingDiv.style.display = 'none';
-        await loadJsonData();
+        if (thisVersion === weeklyViewVersion) {
+            loadingDiv.style.display = 'none';
+            await loadJsonData();
+        }
     }
 }
 
@@ -1498,13 +1643,15 @@ async function loadJsonData(): Promise<void> {
     const feedsTab = document.getElementById('feeds-json-tab') as HTMLButtonElement;
     const diapersTab = document.getElementById('diapers-json-tab') as HTMLButtonElement;
     const pumpsTab = document.getElementById('pumps-json-tab') as HTMLButtonElement;
+    const sleepTab = document.getElementById('sleep-json-tab') as HTMLButtonElement;
 
     if (!jsonContent || !toggleButton || !copyButton) return;
 
-    let currentTab: 'feeds' | 'diapers' | 'pumps' = 'feeds';
+    let currentTab: 'feeds' | 'diapers' | 'pumps' | 'sleep' = 'feeds';
     let feedsData: any[] = [];
     let diapersData: any[] = [];
     let pumpsData: any[] = [];
+    let sleepData: any[] = [];
 
     try {
         const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
@@ -1537,6 +1684,13 @@ async function loadJsonData(): Promise<void> {
                     unit: data.unit,
                     notes: data.notes || ''
                 });
+            } else if (data.type === 'Sleep') {
+                sleepData.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    endTime: data.endTime ? data.endTime.toDate().toISOString() : null,
+                    notes: data.notes || ''
+                });
             }
         });
 
@@ -1546,6 +1700,8 @@ async function loadJsonData(): Promise<void> {
                 dataToShow = feedsData;
             } else if (currentTab === 'diapers') {
                 dataToShow = diapersData;
+            } else if (currentTab === 'sleep') {
+                dataToShow = sleepData;
             } else {
                 dataToShow = pumpsData;
             }
@@ -1561,12 +1717,14 @@ async function loadJsonData(): Promise<void> {
         const newFeedsTab = feedsTab?.cloneNode(true) as HTMLButtonElement;
         const newDiapersTab = diapersTab?.cloneNode(true) as HTMLButtonElement;
         const newPumpsTab = pumpsTab?.cloneNode(true) as HTMLButtonElement;
+        const newSleepTab = sleepTab?.cloneNode(true) as HTMLButtonElement;
 
         toggleButton.parentNode?.replaceChild(newToggleButton, toggleButton);
         copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
         if (feedsTab && newFeedsTab) feedsTab.parentNode?.replaceChild(newFeedsTab, feedsTab);
         if (diapersTab && newDiapersTab) diapersTab.parentNode?.replaceChild(newDiapersTab, diapersTab);
         if (pumpsTab && newPumpsTab) pumpsTab.parentNode?.replaceChild(newPumpsTab, pumpsTab);
+        if (sleepTab && newSleepTab) sleepTab.parentNode?.replaceChild(newSleepTab, sleepTab);
 
         newToggleButton.addEventListener('click', () => {
             const isHidden = jsonContent.style.display === 'none';
@@ -1595,6 +1753,7 @@ async function loadJsonData(): Promise<void> {
                 newFeedsTab.classList.add('active');
                 newDiapersTab.classList.remove('active');
                 newPumpsTab.classList.remove('active');
+                newSleepTab.classList.remove('active');
                 currentJsonString = updateDisplay();
             });
         }
@@ -1605,6 +1764,7 @@ async function loadJsonData(): Promise<void> {
                 newDiapersTab.classList.add('active');
                 newFeedsTab.classList.remove('active');
                 newPumpsTab.classList.remove('active');
+                newSleepTab.classList.remove('active');
                 currentJsonString = updateDisplay();
             });
         }
@@ -1615,6 +1775,18 @@ async function loadJsonData(): Promise<void> {
                 newPumpsTab.classList.add('active');
                 newFeedsTab.classList.remove('active');
                 newDiapersTab.classList.remove('active');
+                newSleepTab.classList.remove('active');
+                currentJsonString = updateDisplay();
+            });
+        }
+
+        if (newSleepTab) {
+            newSleepTab.addEventListener('click', () => {
+                currentTab = 'sleep';
+                newSleepTab.classList.add('active');
+                newFeedsTab.classList.remove('active');
+                newDiapersTab.classList.remove('active');
+                newPumpsTab.classList.remove('active');
                 currentJsonString = updateDisplay();
             });
         }
@@ -1669,13 +1841,17 @@ async function updateGraph(): Promise<void> {
             'diaper-poo': 0,
             'diaper-mixed': 0,
             'diaper-all': 0,
-            'pump': 0
+            'pump': 0,
+            'sleep': 0
         };
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    snapshot.forEach(doc => {
-        const data = doc.data();
+    // Collect sleep entries for cross-day calculation
+    const allSleepEntries: { startTime: Date; endTime: Date | null }[] = [];
+
+    snapshot.forEach(docRef => {
+        const data = docRef.data();
         const date = data.startTime.toDate();
         const dateKey = formatDateForInput(date);
 
@@ -1704,7 +1880,25 @@ async function updateGraph(): Promise<void> {
                 dateMap[dateKey]['pump'] += amountOz;
             }
         }
+
+        if (data.type === 'Sleep') {
+            allSleepEntries.push({
+                startTime: data.startTime.toDate(),
+                endTime: data.endTime ? data.endTime.toDate() : null
+            });
+        }
     });
+
+    // Compute sleep hours per day using midnight-to-midnight clamping
+    if (selectedSeries.includes('sleep')) {
+        for (const dateKey of Object.keys(dateMap)) {
+            const [y, m, d] = dateKey.split('-').map(Number);
+            const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+            const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
+            const ms = computeDaySleepMs(allSleepEntries, dayStart, dayEnd);
+            dateMap[dateKey]['sleep'] = parseFloat((ms / (1000 * 60 * 60)).toFixed(1));
+        }
+    }
 
     const labels = Object.keys(dateMap).sort();
     const datasets: any[] = [];
@@ -1717,7 +1911,8 @@ async function updateGraph(): Promise<void> {
         'diaper-poo': '#795548',
         'diaper-mixed': '#FF9800',
         'diaper-all': '#607D8B',
-        'pump': '#E91E63'
+        'pump': '#E91E63',
+        'sleep': '#00897B'
     };
 
     const labelMap: { [key: string]: string } = {
@@ -1728,7 +1923,8 @@ async function updateGraph(): Promise<void> {
         'diaper-poo': 'Diaper - Poo',
         'diaper-mixed': 'Diaper - Mixed',
         'diaper-all': 'Diaper - All',
-        'pump': 'Pump'
+        'pump': 'Pump',
+        'sleep': 'Sleep (hours)'
     };
 
     selectedSeries.forEach(series => {
@@ -1790,6 +1986,8 @@ async function updateGraph(): Promise<void> {
                             // Check if it's a diaper series
                             if (seriesName.includes('diaper')) {
                                 label += Math.round(value);
+                            } else if (seriesName.includes('sleep')) {
+                                label += value.toFixed(1) + ' hrs';
                             } else {
                                 // For bottles/pumps, round to nearest tenth and add oz
                                 label += value.toFixed(1) + ' oz';
@@ -1815,7 +2013,7 @@ async function updateGraph(): Promise<void> {
                     },
                     title: {
                         display: true,
-                        text: 'Amount (oz) / Count'
+                        text: 'Amount (oz) / Count / Hours'
                     }
                 }
             }
@@ -1887,10 +2085,12 @@ function openEditModal(docId: string, data: any): void {
     const editBottleFields = document.getElementById('edit-bottle-fields') as HTMLElement;
     const editDiaperFields = document.getElementById('edit-diaper-fields') as HTMLElement;
     const editPumpFields = document.getElementById('edit-pump-fields') as HTMLElement;
+    const editSleepFields = document.getElementById('edit-sleep-fields') as HTMLElement;
 
     editBottleFields.style.display = 'none';
     editDiaperFields.style.display = 'none';
     editPumpFields.style.display = 'none';
+    editSleepFields.style.display = 'none';
 
     const startTime = data.startTime.toDate();
 
@@ -1950,6 +2150,15 @@ function openEditModal(docId: string, data: any): void {
         editPumpUnit.value = data.unit || 'oz';
         editPumpAmount.dataset.lastUnit = data.unit || 'oz';
         (document.getElementById('edit-pump-notes') as HTMLTextAreaElement).value = data.notes || '';
+    } else if (data.type === 'Sleep') {
+        editSleepFields.style.display = 'block';
+        (document.getElementById('edit-sleep-start-time') as HTMLInputElement).value = formatDateTime(startTime);
+        if (data.endTime) {
+            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(data.endTime.toDate());
+        } else {
+            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = '';
+        }
+        (document.getElementById('edit-sleep-notes') as HTMLTextAreaElement).value = data.notes || '';
     }
 
     modal.style.display = 'block';
@@ -1973,6 +2182,7 @@ async function saveEdit(): Promise<void> {
         const editBottleFields = document.getElementById('edit-bottle-fields') as HTMLElement;
         const editDiaperFields = document.getElementById('edit-diaper-fields') as HTMLElement;
         const editPumpFields = document.getElementById('edit-pump-fields') as HTMLElement;
+        const editSleepFields = document.getElementById('edit-sleep-fields') as HTMLElement;
 
         let updateData: any = {};
         const now = new Date();
@@ -2057,6 +2267,37 @@ async function saveEdit(): Promise<void> {
                 unit: unit,
                 notes: notes
             };
+        } else if (editSleepFields.style.display === 'block') {
+            const startInput = document.getElementById('edit-sleep-start-time') as HTMLInputElement;
+            const endInput = document.getElementById('edit-sleep-end-time') as HTMLInputElement;
+            const notes = (document.getElementById('edit-sleep-notes') as HTMLTextAreaElement).value;
+
+            if (!startInput.value) {
+                throw new Error('Start time is required');
+            }
+
+            const selectedStartTime = new Date(startInput.value);
+            if (selectedStartTime > now) {
+                throw new Error('Cannot set time in the future');
+            }
+
+            updateData = {
+                startTime: Timestamp.fromDate(selectedStartTime),
+                notes: notes
+            };
+
+            if (endInput.value) {
+                const selectedEndTime = new Date(endInput.value);
+                if (selectedEndTime > now) {
+                    throw new Error('End time cannot be in the future');
+                }
+                if (selectedEndTime <= selectedStartTime) {
+                    throw new Error('End time must be after start time');
+                }
+                updateData.endTime = Timestamp.fromDate(selectedEndTime);
+            } else {
+                updateData.endTime = null;
+            }
         }
 
         await updateDoc(doc(db, 'entries', currentEditingEntryId), updateData);
@@ -2068,6 +2309,7 @@ async function saveEdit(): Promise<void> {
         setTimeout(async () => {
             closeEditModal();
             loadTimeline();
+            loadWeeklyView();
             await updateAllEventTimes();
         }, 1000);
     } catch (error) {
@@ -2085,6 +2327,7 @@ async function deleteEntry(docId: string): Promise<void> {
     try {
         await deleteDoc(doc(db, 'entries', docId));
         loadTimeline();
+        loadWeeklyView();
         await updateAllEventTimes();
     } catch (error) {
         alert('Failed to delete entry');
@@ -2098,18 +2341,21 @@ async function startAllTimers(): Promise<void> {
     if (lastPeeTimerInterval) clearInterval(lastPeeTimerInterval);
     if (lastPooTimerInterval) clearInterval(lastPooTimerInterval);
     if (lastPumpTimerInterval) clearInterval(lastPumpTimerInterval);
+    if (timeAwakeTimerInterval) clearInterval(timeAwakeTimerInterval);
 
     lastBottleTimerInterval = window.setInterval(() => updateLastBottleDisplay(), 1000);
     lastPeeTimerInterval = window.setInterval(() => updateLastPeeDisplay(), 1000);
     lastPooTimerInterval = window.setInterval(() => updateLastPooDisplay(), 1000);
     lastPumpTimerInterval = window.setInterval(() => updateLastPumpDisplay(), 1000);
+    timeAwakeTimerInterval = window.setInterval(() => updateTimeAwakeDisplay(), 1000);
 }
 
 async function updateAllEventTimes(): Promise<void> {
     await Promise.all([
         updateLastBottleTime(),
         updateLastDiaperTimes(),
-        updateLastPumpTime()
+        updateLastPumpTime(),
+        updateLastSleepEndTime()
     ]);
 }
 
@@ -2340,6 +2586,41 @@ function updateLastPumpDisplay(): void {
     }).join('<br>');
 
     displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">Next pumps:<br>${nextPumpsText}</span>`;
+}
+
+async function updateLastSleepEndTime(): Promise<void> {
+    try {
+        const q = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Sleep'),
+            orderBy('startTime', 'desc'),
+            limit(1)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+            const data = snapshot.docs[0].data();
+            if (data.endTime) {
+                localStorage.setItem('lastSleepEndTime', data.endTime.toDate().toISOString());
+            } else {
+                localStorage.removeItem('lastSleepEndTime');
+            }
+        } else {
+            localStorage.removeItem('lastSleepEndTime');
+        }
+
+        updateTimeAwakeDisplay();
+    } catch (error) {
+        console.error('Error fetching last sleep end time:', error);
+    }
+}
+
+function updateTimeAwakeDisplay(): void {
+    const displayElement = document.getElementById('time-awake-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastSleepEndStr = localStorage.getItem('lastSleepEndTime');
+    displayElement.textContent = formatTimeDifference(lastSleepEndStr, 'No sleep recorded');
 }
 
 window.addEventListener('DOMContentLoaded', () => {
