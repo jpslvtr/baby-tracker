@@ -521,7 +521,7 @@ function setDefaultTimes(): void {
         pumpStartTime.value = formatted;
     }
     if (sleepStartTime) {
-        sleepStartTime.value = formatted;
+        sleepStartTime.value = '';
     }
 }
 
@@ -1333,10 +1333,15 @@ async function loadTimeline(): Promise<void> {
                     allPooEntries.sort((a, b) => b.time - a.time); // Newest first
 
                     const currentIndex = allPooEntries.findIndex(e => e.time === currentTime);
-                    if (currentIndex < allPooEntries.length - 1) { // Check if there's an older entry
-                        const previousPooTime = allPooEntries[currentIndex + 1].time; // Next in array = older in time
+                    if (currentIndex >= 0 && currentIndex < allPooEntries.length - 1) {
+                        const previousPooTime = allPooEntries[currentIndex + 1].time;
                         const hoursSince = (currentTime - previousPooTime) / (1000 * 60 * 60);
                         timeSincePooHTML = `<div class="timeline-entry-details" style="color: #666; font-style: italic;">${hoursSince.toFixed(1)} hours since previous poo</div>`;
+                    } else if (currentIndex >= 0 && currentIndex === allPooEntries.length - 1) {
+                        // This is the oldest poo in the visible range (or the only one).
+                        // Mark it for async lookup.
+                        entry.dataset.needsPriorPoo = 'true';
+                        entry.dataset.pooTime = String(currentTime);
                     }
                 }
 
@@ -1362,6 +1367,50 @@ async function loadTimeline(): Promise<void> {
 
                 timelineList.appendChild(entry);
             });
+
+            // Async: fill in "time since previous poo" for entries where the prior poo was outside the date range
+            const needsPriorPooEntries = timelineList.querySelectorAll('[data-needs-prior-poo="true"]');
+            for (const pooEntry of Array.from(needsPriorPooEntries)) {
+                const pooTime = parseInt((pooEntry as HTMLElement).dataset.pooTime || '0', 10);
+                if (pooTime > 0) {
+                    try {
+                        const priorPooQ = query(
+                            collection(db, 'entries'),
+                            where('type', '==', 'Diaper'),
+                            where('startTime', '<', Timestamp.fromDate(new Date(pooTime))),
+                            orderBy('startTime', 'desc')
+                        );
+                        const priorPooSnap = await getDocs(priorPooQ);
+                        let previousPooTime: number | null = null;
+                        priorPooSnap.forEach(d => {
+                            if (previousPooTime !== null) return;
+                            const dData = d.data();
+                            if (dData.diaperType === 'Poo' || dData.diaperType === 'Mixed') {
+                                previousPooTime = dData.startTime.toDate().getTime();
+                            }
+                        });
+                        if (previousPooTime !== null) {
+                            const hoursSince = (pooTime - previousPooTime) / (1000 * 60 * 60);
+                            const timeSinceDiv = document.createElement('div');
+                            timeSinceDiv.className = 'timeline-entry-details';
+                            timeSinceDiv.style.color = '#666';
+                            timeSinceDiv.style.fontStyle = 'italic';
+                            timeSinceDiv.textContent = `${hoursSince.toFixed(1)} hours since previous poo`;
+                            // Insert before the actions div
+                            const actionsDiv = (pooEntry as HTMLElement).querySelector('.timeline-entry-actions');
+                            if (actionsDiv) {
+                                (pooEntry as HTMLElement).insertBefore(timeSinceDiv, actionsDiv);
+                            } else {
+                                (pooEntry as HTMLElement).appendChild(timeSinceDiv);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching prior poo entry:', e);
+                    }
+                }
+                (pooEntry as HTMLElement).removeAttribute('data-needs-prior-poo');
+                (pooEntry as HTMLElement).removeAttribute('data-poo-time');
+            }
 
             if (!hasVisibleEntries) {
                 timelineList.innerHTML = '<p>No entries match the selected filters.</p>';
