@@ -24,8 +24,16 @@
     <div id="app" class="container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h1 style="margin: 0;">Baby Tracker</h1>
-            <button id="refresh-button"
-                style="width: 40px; height: 40px; padding: 0; margin: 0; font-size: 20px;">↻</button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <select id="timezone-select"
+                    style="height: 40px; padding: 0 8px; font-size: 14px; border: 2px outset #ddd; background-color: #ddd; color: #333; cursor: pointer; margin: 0; box-sizing: border-box;">
+                    <option value="America/New_York">EST</option>
+                    <option value="America/Los_Angeles">PST</option>
+                    <option value="Asia/Seoul">KST</option>
+                </select>
+                <button id="refresh-button"
+                    style="width: 40px; height: 40px; padding: 0; margin: 0; font-size: 20px;">↻</button>
+            </div>
         </div>
 
         <div class="tab-buttons">
@@ -49,20 +57,16 @@
                         <div id="nap-time-value" class="timer-value">Loading...</div>
                     </div>
                     <div class="timer-item">
-                        <div class="timer-label">Last Bottle</div>
-                        <div id="last-bottle-value" class="timer-value">Loading...</div>
-                    </div>
-                    <div class="timer-item">
-                        <div class="timer-label">Last Pump</div>
-                        <div id="last-pump-value" class="timer-value">Loading...</div>
-                    </div>
-                    <div class="timer-item">
                         <div class="timer-label">Last Pee</div>
                         <div id="last-pee-value" class="timer-value">Loading...</div>
                     </div>
                     <div class="timer-item">
                         <div class="timer-label">Last Poo</div>
                         <div id="last-poo-value" class="timer-value">Loading...</div>
+                    </div>
+                    <div class="timer-item">
+                        <div class="timer-label">Last Bottle</div>
+                        <div id="last-bottle-value" class="timer-value">Loading...</div>
                     </div>
                 </div>
 

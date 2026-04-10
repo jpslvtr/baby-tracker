@@ -55,6 +55,64 @@ let vitaminDDateCheckInterval: number | null = null;
 let dataChart: any = null;
 let weeklyViewVersion = 0;
 
+// ── Timezone helpers ──────────────────────────────────────────────────────────
+
+function getSelectedTimezone(): string {
+    return localStorage.getItem('selectedTimezone') || 'America/New_York';
+}
+
+// Converts a UTC Date to a plain Date whose .getFullYear()/.getMonth()/.getDate()/.getHours()
+// reflect that UTC moment in the selected timezone.
+function toTZDate(utcDate: Date, tz?: string): Date {
+    const timezone = tz || getSelectedTimezone();
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    }).formatToParts(utcDate);
+    const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+    let h = get('hour');
+    if (h === 24) h = 0;
+    return new Date(get('year'), get('month') - 1, get('day'), h, get('minute'), get('second'));
+}
+
+// Returns a Date with fields reflecting "now" in the selected timezone.
+function nowInTZ(tz?: string): Date {
+    return toTZDate(new Date(), tz);
+}
+
+// Parses a datetime-local string as if entered in the selected timezone,
+// and returns the true UTC Date.
+function parseTZDateTime(value: string): Date {
+    const [datePart, timePart] = value.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+    const tz = getSelectedTimezone();
+    const candidate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+    const tzParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+        hour12: false
+    }).formatToParts(candidate);
+    const getP = (type: string) => parseInt(tzParts.find(p => p.type === type)?.value || '0', 10);
+    let tzH = getP('hour');
+    if (tzH === 24) tzH = 0;
+    const tzAsLocal = new Date(getP('year'), getP('month') - 1, getP('day'), tzH, getP('minute'));
+    const desiredLocal = new Date(year, month - 1, day, hours, minutes);
+    const offsetMs = tzAsLocal.getTime() - desiredLocal.getTime();
+    return new Date(candidate.getTime() - offsetMs);
+}
+
+// Given a Date whose fields are in selected TZ (from nowInTZ / arithmetic),
+// returns a YYYY-MM-DD string.
+function tzDateToDateStr(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ── End timezone helpers ──────────────────────────────────────────────────────
+
 function getWeekStart(date: Date): Date {
     const d = new Date(date);
     const day = d.getDay();
@@ -71,6 +129,8 @@ function getWeekEnd(weekStart: Date): Date {
     return end;
 }
 
+// formatDateTime: accepts a TZ-adjusted Date (fields already in selected TZ).
+// Used to populate datetime-local inputs.
 function formatDateTime(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -87,7 +147,9 @@ function formatDateForInput(date: Date): string {
     return `${year}-${month}-${day}`;
 }
 
-function formatDisplayDateTime(date: Date): string {
+// Accepts a UTC Date from Firestore and displays it in the selected timezone.
+function formatDisplayDateTime(utcDate: Date): string {
+    const date = toTZDate(utcDate);
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const year = date.getFullYear();
@@ -98,7 +160,9 @@ function formatDisplayDateTime(date: Date): string {
     return `${month}/${day}/${year} ${displayHours}:${minutes} ${ampm}`;
 }
 
-function formatDateOnly(date: Date): string {
+// Accepts a UTC Date and returns the day label in the selected timezone.
+function formatDateOnly(utcDate: Date): string {
+    const date = toTZDate(utcDate);
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -106,7 +170,9 @@ function formatDateOnly(date: Date): string {
     return `${days[date.getDay()]}, ${month}/${day}/${year}`;
 }
 
-function getDateKey(date: Date): string {
+// Accepts a UTC Date and returns YYYY-MM-DD in the selected timezone.
+function getDateKey(utcDate: Date): string {
+    const date = toTZDate(utcDate);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -150,11 +216,12 @@ function scheduleNextMidnightCheck(): void {
     }
 
     const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-
-    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+    const nowTZ = nowInTZ();
+    const tomorrowTZ = new Date(nowTZ);
+    tomorrowTZ.setDate(tomorrowTZ.getDate() + 1);
+    tomorrowTZ.setHours(0, 0, 0, 0);
+    const midnightUTC = parseTZDateTime(formatDateTime(tomorrowTZ));
+    const msUntilMidnight = midnightUTC.getTime() - now.getTime();
 
     vitaminDDateCheckInterval = window.setTimeout(() => {
         loadVitaminDStatus();
@@ -231,7 +298,7 @@ function initializeUI(): void {
 }
 
 function setDefaultDateFilters(): void {
-    const today = new Date();
+    const today = nowInTZ();
     const startDateInput = document.getElementById('start-date-filter') as HTMLInputElement;
     const endDateInput = document.getElementById('end-date-filter') as HTMLInputElement;
 
@@ -353,12 +420,12 @@ function convertAmountInInput(amountInput: HTMLInputElement, newUnit: string): v
 function validateTime(input: HTMLInputElement): boolean {
     if (!input.value) return true;
 
-    const selectedTime = new Date(input.value);
+    const selectedTime = parseTZDateTime(input.value);
     const now = new Date();
 
     if (selectedTime > now) {
         alert(`Cannot select future times. Please select a time in the past.`);
-        input.value = formatDateTime(now);
+        input.value = formatDateTime(nowInTZ());
         return false;
     }
 
@@ -435,7 +502,6 @@ function setupEventListeners(): void {
     }
 
     const entryTab = document.getElementById('entry-tab') as HTMLButtonElement;
-
     const timelineTab = document.getElementById('timeline-tab') as HTMLButtonElement;
     const weeklyTab = document.getElementById('weekly-tab') as HTMLButtonElement;
 
@@ -493,17 +559,32 @@ function setupEventListeners(): void {
     if (graphStartDate && graphEndDate) {
         const BIRTH_DATE = new Date(2025, 10, 5);
         graphStartDate.value = formatDateForInput(BIRTH_DATE);
-        graphEndDate.value = formatDateForInput(new Date());
+        graphEndDate.value = formatDateForInput(nowInTZ());
     }
 
     const updateGraphBtn = document.getElementById('update-graph-btn');
     if (updateGraphBtn) {
         updateGraphBtn.addEventListener('click', updateGraph);
     }
+
+    // Timezone dropdown
+    const timezoneSelect = document.getElementById('timezone-select') as HTMLSelectElement;
+    if (timezoneSelect) {
+        timezoneSelect.value = getSelectedTimezone();
+        timezoneSelect.addEventListener('change', () => {
+            localStorage.setItem('selectedTimezone', timezoneSelect.value);
+            setDefaultTimes();
+            setDefaultDateFilters();
+            loadVitaminDStatus();
+            updateAllEventTimes();
+            loadTimeline();
+            loadWeeklyView();
+        });
+    }
 }
 
 function setDefaultTimes(): void {
-    const now = new Date();
+    const now = nowInTZ();
     const formatted = formatDateTime(now);
 
     const bottleTime = document.getElementById('bottle-time') as HTMLInputElement | null;
@@ -692,9 +773,7 @@ function protectBottleNotesFirstLine(): void {
         const currentValue = notesTextarea.value;
         const lines = currentValue.split('\n');
 
-        // If first line has been modified or removed, restore it
         if (lines.length === 0 || (lines[0] !== selectedType && lines[0] !== '')) {
-            // User tried to modify the first line, restore it
             if (lines.length === 0) {
                 notesTextarea.value = selectedType + '\n';
             } else if (lines[0] !== selectedType) {
@@ -703,7 +782,6 @@ function protectBottleNotesFirstLine(): void {
             }
         }
 
-        // Ensure there's always at least a newline after the type
         if (currentValue === selectedType) {
             notesTextarea.value = selectedType + '\n';
         }
@@ -717,39 +795,32 @@ function protectBottleNotesFirstLine(): void {
         const cursorPos = textarea.selectionStart;
         const firstLineLength = selectedType.length;
 
-        // Prevent any editing in the first line (including the newline after it)
         if (cursorPos <= firstLineLength) {
-            // Allow navigation keys
             if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
                 return;
             }
 
-            // Allow selecting text (but not modifying)
             if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
                 return;
             }
 
-            // Prevent backspace/delete in the first line
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 e.preventDefault();
                 return;
             }
 
-            // For any character input, move cursor to after the newline
             if (e.key.length === 1 || e.key === 'Enter') {
                 e.preventDefault();
                 textarea.selectionStart = firstLineLength + 1;
                 textarea.selectionEnd = firstLineLength + 1;
 
                 if (e.key === 'Enter') {
-                    // Insert newline at new cursor position
                     const before = textarea.value.substring(0, firstLineLength + 1);
                     const after = textarea.value.substring(firstLineLength + 1);
                     textarea.value = before + '\n' + after;
                     textarea.selectionStart = firstLineLength + 2;
                     textarea.selectionEnd = firstLineLength + 2;
                 } else if (e.key.length === 1) {
-                    // Insert the character at new cursor position
                     const before = textarea.value.substring(0, firstLineLength + 1);
                     const after = textarea.value.substring(firstLineLength + 1);
                     textarea.value = before + e.key + after;
@@ -769,7 +840,6 @@ function protectBottleNotesFirstLine(): void {
         const cursorPos = textarea.selectionStart;
         const firstLineLength = selectedType.length;
 
-        // If pasting in the first line, prevent it
         if (cursorPos <= firstLineLength) {
             e.preventDefault();
             return;
@@ -790,9 +860,7 @@ function protectEditBottleNotesFirstLine(): void {
         const currentValue = notesTextarea.value;
         const lines = currentValue.split('\n');
 
-        // If first line has been modified or removed, restore it
         if (lines.length === 0 || (lines[0] !== selectedType && lines[0] !== '')) {
-            // User tried to modify the first line, restore it
             if (lines.length === 0) {
                 notesTextarea.value = selectedType + '\n';
             } else if (lines[0] !== selectedType) {
@@ -801,7 +869,6 @@ function protectEditBottleNotesFirstLine(): void {
             }
         }
 
-        // Ensure there's always at least a newline after the type
         if (currentValue === selectedType) {
             notesTextarea.value = selectedType + '\n';
         }
@@ -815,39 +882,32 @@ function protectEditBottleNotesFirstLine(): void {
         const cursorPos = textarea.selectionStart;
         const firstLineLength = selectedType.length;
 
-        // Prevent any editing in the first line (including the newline after it)
         if (cursorPos <= firstLineLength) {
-            // Allow navigation keys
             if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
                 return;
             }
 
-            // Allow selecting text (but not modifying)
             if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
                 return;
             }
 
-            // Prevent backspace/delete in the first line
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 e.preventDefault();
                 return;
             }
 
-            // For any character input, move cursor to after the newline
             if (e.key.length === 1 || e.key === 'Enter') {
                 e.preventDefault();
                 textarea.selectionStart = firstLineLength + 1;
                 textarea.selectionEnd = firstLineLength + 1;
 
                 if (e.key === 'Enter') {
-                    // Insert newline at new cursor position
                     const before = textarea.value.substring(0, firstLineLength + 1);
                     const after = textarea.value.substring(firstLineLength + 1);
                     textarea.value = before + '\n' + after;
                     textarea.selectionStart = firstLineLength + 2;
                     textarea.selectionEnd = firstLineLength + 2;
                 } else if (e.key.length === 1) {
-                    // Insert the character at new cursor position
                     const before = textarea.value.substring(0, firstLineLength + 1);
                     const after = textarea.value.substring(firstLineLength + 1);
                     textarea.value = before + e.key + after;
@@ -867,7 +927,6 @@ function protectEditBottleNotesFirstLine(): void {
         const cursorPos = textarea.selectionStart;
         const firstLineLength = selectedType.length;
 
-        // If pasting in the first line, prevent it
         if (cursorPos <= firstLineLength) {
             e.preventDefault();
             return;
@@ -894,7 +953,7 @@ async function handleSubmitEntry(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedTime = new Date(timeInput.value);
+            const selectedTime = parseTZDateTime(timeInput.value);
             if (selectedTime > now) {
                 throw new Error('Cannot add entries in the future');
             }
@@ -927,7 +986,7 @@ async function handleSubmitEntry(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedTime = new Date(timeInput.value);
+            const selectedTime = parseTZDateTime(timeInput.value);
             if (selectedTime > now) {
                 throw new Error('Cannot add entries in the future');
             }
@@ -952,7 +1011,7 @@ async function handleSubmitEntry(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedStartTime = new Date(startTimeInput.value);
+            const selectedStartTime = parseTZDateTime(startTimeInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot add entries in the future');
             }
@@ -976,7 +1035,7 @@ async function handleSubmitEntry(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedStartTime = new Date(startTimeInput.value);
+            const selectedStartTime = parseTZDateTime(startTimeInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot add entries in the future');
             }
@@ -998,7 +1057,7 @@ async function handleSubmitEntry(): Promise<void> {
 
             let selectedEndTime: Date | undefined = undefined;
             if (endTimeInput.value) {
-                selectedEndTime = new Date(endTimeInput.value);
+                selectedEndTime = parseTZDateTime(endTimeInput.value);
                 if (selectedEndTime > now) {
                     throw new Error('End time cannot be in the future');
                 }
@@ -1076,7 +1135,7 @@ function clearForm(): void {
 function handleQuickFilter(filterType: string): void {
     const startDateInput = document.getElementById('start-date-filter') as HTMLInputElement;
     const endDateInput = document.getElementById('end-date-filter') as HTMLInputElement;
-    const today = new Date();
+    const today = nowInTZ();
     today.setHours(0, 0, 0, 0);
 
     if (filterType === 'all-time') {
@@ -1125,11 +1184,10 @@ async function loadTimeline(): Promise<void> {
         let q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
 
         if (startDateInput && endDateInput) {
-            const [startYear, startMonth, startDay] = startDateInput.split('-').map(Number);
-            const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+            const startDate = parseTZDateTime(`${startDateInput}T00:00`);
 
-            const [endYear, endMonth, endDay] = endDateInput.split('-').map(Number);
-            const endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+            const endDate = parseTZDateTime(`${endDateInput}T23:59`);
+            endDate.setSeconds(59, 999);
 
             q = query(
                 collection(db, 'entries'),
@@ -1146,8 +1204,10 @@ async function loadTimeline(): Promise<void> {
         let priorEveningSleepDocs: { id: string; data: any }[] = [];
         if (startDateInput) {
             const [sY, sM, sD] = startDateInput.split('-').map(Number);
-            const priorEveningStart = new Date(sY, sM - 1, sD - 1, 19, 0, 0, 0); // prev day 7pm
-            const priorEveningEnd = new Date(sY, sM - 1, sD, 0, 0, 0, 0); // midnight
+            const priorDay = new Date(sY, sM - 1, sD - 1);
+            const priorDayStr = `${priorDay.getFullYear()}-${String(priorDay.getMonth() + 1).padStart(2, '0')}-${String(priorDay.getDate()).padStart(2, '0')}`;
+            const priorEveningStart = parseTZDateTime(`${priorDayStr}T19:00`);
+            const priorEveningEnd = parseTZDateTime(`${startDateInput}T00:00`);
 
             const priorEveningQ = query(
                 collection(db, 'entries'),
@@ -1167,17 +1227,14 @@ async function loadTimeline(): Promise<void> {
         }
 
         // Merge prior evening sleep docs into a combined list for rendering
-        // Build a map of all docs: prior evening sleep first, then main snapshot
         const allTimelineDocs: { id: string; data: any }[] = [];
         const seenIds = new Set<string>();
 
-        // Add main snapshot docs
         snapshot.forEach(docSnapshot => {
             allTimelineDocs.push({ id: docSnapshot.id, data: docSnapshot.data() });
             seenIds.add(docSnapshot.id);
         });
 
-        // Add prior evening sleep docs (avoid duplicates)
         priorEveningSleepDocs.forEach(d => {
             if (!seenIds.has(d.id)) {
                 allTimelineDocs.push(d);
@@ -1185,7 +1242,6 @@ async function loadTimeline(): Promise<void> {
             }
         });
 
-        // Sort all docs by startTime descending
         allTimelineDocs.sort((a, b) => b.data.startTime.toDate().getTime() - a.data.startTime.toDate().getTime());
 
         const summaryStats = {
@@ -1330,7 +1386,7 @@ async function loadTimeline(): Promise<void> {
                         }
                     });
 
-                    allPooEntries.sort((a, b) => b.time - a.time); // Newest first
+                    allPooEntries.sort((a, b) => b.time - a.time);
 
                     const currentIndex = allPooEntries.findIndex(e => e.time === currentTime);
                     if (currentIndex >= 0 && currentIndex < allPooEntries.length - 1) {
@@ -1338,8 +1394,6 @@ async function loadTimeline(): Promise<void> {
                         const hoursSince = (currentTime - previousPooTime) / (1000 * 60 * 60);
                         timeSincePooHTML = `<div class="timeline-entry-details" style="color: #666; font-style: italic;">${hoursSince.toFixed(1)} hours since previous poo</div>`;
                     } else if (currentIndex >= 0 && currentIndex === allPooEntries.length - 1) {
-                        // This is the oldest poo in the visible range (or the only one).
-                        // Mark it for async lookup.
                         entry.dataset.needsPriorPoo = 'true';
                         entry.dataset.pooTime = String(currentTime);
                     }
@@ -1396,7 +1450,6 @@ async function loadTimeline(): Promise<void> {
                             timeSinceDiv.style.color = '#666';
                             timeSinceDiv.style.fontStyle = 'italic';
                             timeSinceDiv.textContent = `${hoursSince.toFixed(1)} hours since previous poo`;
-                            // Insert before the actions div
                             const actionsDiv = (pooEntry as HTMLElement).querySelector('.timeline-entry-actions');
                             if (actionsDiv) {
                                 (pooEntry as HTMLElement).insertBefore(timeSinceDiv, actionsDiv);
@@ -1579,20 +1632,19 @@ function computeDaySleepMs(sleepEntries: { startTime: Date; endTime: Date | null
     return totalMs;
 }
 
-// For a given date, a "sleep day" spans from the previous day at 7pm
-// to the next day at 7am. Sleep sessions are clamped to this window.
-// Example: Saturday's sleep day = Friday 7pm → Sunday 7am.
+// For a given date (fields in selected TZ), a "sleep day" spans from
+// the previous day at 7pm to the next day at 7am in the selected timezone.
 function getSleepDayBounds(date: Date): { start: Date; end: Date } {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
 
-    const start = new Date(d);
-    start.setDate(start.getDate() - 1);
-    start.setHours(19, 0, 0, 0); // previous day 7pm
+    const prevDay = new Date(d);
+    prevDay.setDate(prevDay.getDate() - 1);
+    const start = parseTZDateTime(`${tzDateToDateStr(prevDay)}T19:00`);
 
-    const end = new Date(d);
-    end.setDate(end.getDate() + 1);
-    end.setHours(7, 0, 0, 0); // next day 7am
+    const nextDay = new Date(d);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const end = parseTZDateTime(`${tzDateToDateStr(nextDay)}T07:00`);
 
     return { start, end };
 }
@@ -1615,7 +1667,7 @@ async function loadWeeklyView(): Promise<void> {
     const BIRTH_DATE = new Date(2025, 10, 5);
     const birthWeekStart = getWeekStart(BIRTH_DATE);
 
-    const today = new Date();
+    const today = nowInTZ();
     const currentWeekStartDate = getWeekStart(today);
 
     const normalizedCurrentWeekStart = new Date(currentWeekStart);
@@ -1666,7 +1718,6 @@ async function loadWeeklyView(): Promise<void> {
         );
         const snapshot = await getDocs(q);
 
-        // If a newer loadWeeklyView call started, abandon this one
         if (thisVersion !== weeklyViewVersion) return;
 
         const vitaminDStartDate = new Date('2025-11-11');
@@ -1681,7 +1732,7 @@ async function loadWeeklyView(): Promise<void> {
             date.setHours(0, 0, 0, 0);
 
             if (date >= vitaminDStartDate) {
-                const dateKey = getDateKey(date);
+                const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                 dateKeysToCheck.push(dateKey);
             }
         }
@@ -1697,7 +1748,6 @@ async function loadWeeklyView(): Promise<void> {
             });
         }
 
-        // If a newer loadWeeklyView call started, abandon this one
         if (thisVersion !== weeklyViewVersion) return;
 
         // Collect all sleep entries for sleep day calculation
@@ -1712,7 +1762,7 @@ async function loadWeeklyView(): Promise<void> {
             }
         });
 
-        // Fetch sleep entries from the day before the week (prev night for first day's sleep day)
+        // Fetch sleep entries from the day before the week
         const priorSleepStart = new Date(currentWeekStart);
         priorSleepStart.setDate(priorSleepStart.getDate() - 1);
         priorSleepStart.setHours(0, 0, 0, 0);
@@ -1737,7 +1787,7 @@ async function loadWeeklyView(): Promise<void> {
             });
         });
 
-        // Fetch sleep entries from the day after the week (for last day's sleep day bounds)
+        // Fetch sleep entries from the day after the week
         const postSleepStart = new Date(weekEnd);
         postSleepStart.setDate(postSleepStart.getDate() + 1);
         postSleepStart.setHours(0, 0, 0, 0);
@@ -1770,7 +1820,7 @@ async function loadWeeklyView(): Promise<void> {
             date.setDate(date.getDate() + i);
             date.setHours(0, 0, 0, 0);
             const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-            const dateKeyFormatted = getDateKey(date);
+            const dateKeyFormatted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
             const sleepBounds = getSleepDayBounds(date);
 
@@ -1787,7 +1837,7 @@ async function loadWeeklyView(): Promise<void> {
         snapshot.forEach(docSnapshot => {
             const data = docSnapshot.data();
             const entryDate = data.startTime.toDate();
-            const normalizedDate = new Date(entryDate);
+            const normalizedDate = toTZDate(entryDate);
             normalizedDate.setHours(0, 0, 0, 0);
             const dateKey = `${normalizedDate.getFullYear()}-${normalizedDate.getMonth()}-${normalizedDate.getDate()}`;
 
@@ -1817,7 +1867,6 @@ async function loadWeeklyView(): Promise<void> {
                     dayStats[dateKey].pumps.total += amount;
                     dayStats[dateKey].pumps.sessions++;
                 }
-                // Sleep is already computed via computeDaySleepMs above
             }
         });
 
@@ -1826,8 +1875,8 @@ async function loadWeeklyView(): Promise<void> {
         const weeklyContainer = document.createElement('div');
         weeklyContainer.className = 'weekly-scroll-container';
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today2 = nowInTZ();
+        today2.setHours(0, 0, 0, 0);
         let currentDayIndex = -1;
 
         daysArray.forEach((stats, index) => {
@@ -1837,7 +1886,7 @@ async function loadWeeklyView(): Promise<void> {
             const statsDate = new Date(stats.date);
             statsDate.setHours(0, 0, 0, 0);
 
-            if (today.getTime() === statsDate.getTime()) {
+            if (today2.getTime() === statsDate.getTime()) {
                 dayDiv.classList.add('current-day');
                 currentDayIndex = index;
             }
@@ -2098,10 +2147,9 @@ async function updateGraph(): Promise<void> {
         return;
     }
 
-    const startDate = new Date(startDateInput);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(endDateInput);
-    endDate.setHours(23, 59, 59, 999);
+    const startDate = parseTZDateTime(`${startDateInput}T00:00`);
+    const endDate = parseTZDateTime(`${endDateInput}T23:59`);
+    endDate.setSeconds(59, 999);
 
     const q = query(
         collection(db, 'entries'),
@@ -2113,11 +2161,11 @@ async function updateGraph(): Promise<void> {
     const snapshot = await getDocs(q);
 
     // Fetch sleep from day before start date (for first day's sleep day bounds)
-    const graphPriorStart = new Date(startDate);
-    graphPriorStart.setDate(graphPriorStart.getDate() - 1);
-    graphPriorStart.setHours(0, 0, 0, 0);
-    const graphPriorEnd = new Date(startDate);
-    graphPriorEnd.setHours(0, 0, 0, 0);
+    const [gpY, gpM, gpD] = startDateInput.split('-').map(Number);
+    const gpPriorDay = new Date(gpY, gpM - 1, gpD - 1);
+    const gpPriorDayStr = `${gpPriorDay.getFullYear()}-${String(gpPriorDay.getMonth() + 1).padStart(2, '0')}-${String(gpPriorDay.getDate()).padStart(2, '0')}`;
+    const graphPriorStart = parseTZDateTime(`${gpPriorDayStr}T00:00`);
+    const graphPriorEnd = parseTZDateTime(`${startDateInput}T00:00`);
 
     const graphPriorSleepQ = query(
         collection(db, 'entries'),
@@ -2129,12 +2177,13 @@ async function updateGraph(): Promise<void> {
     const graphPriorSleepSnap = await getDocs(graphPriorSleepQ);
 
     // Fetch sleep from day after end date (for last day's sleep day bounds)
-    const graphPostStart = new Date(endDate);
-    graphPostStart.setDate(graphPostStart.getDate() + 1);
-    graphPostStart.setHours(0, 0, 0, 0);
-    const graphPostEnd = new Date(graphPostStart);
-    graphPostEnd.setDate(graphPostEnd.getDate() + 1);
-    graphPostEnd.setHours(0, 0, 0, 0);
+    const [geY, geM, geD] = endDateInput.split('-').map(Number);
+    const gpPostDay = new Date(geY, geM - 1, geD + 1);
+    const gpPostDayStr = `${gpPostDay.getFullYear()}-${String(gpPostDay.getMonth() + 1).padStart(2, '0')}-${String(gpPostDay.getDate()).padStart(2, '0')}`;
+    const gpPostDay2 = new Date(geY, geM - 1, geD + 2);
+    const gpPostDay2Str = `${gpPostDay2.getFullYear()}-${String(gpPostDay2.getMonth() + 1).padStart(2, '0')}-${String(gpPostDay2.getDate()).padStart(2, '0')}`;
+    const graphPostStart = parseTZDateTime(`${gpPostDayStr}T00:00`);
+    const graphPostEnd = parseTZDateTime(`${gpPostDay2Str}T00:00`);
 
     const graphPostSleepQ = query(
         collection(db, 'entries'),
@@ -2147,9 +2196,12 @@ async function updateGraph(): Promise<void> {
 
     const dateMap: { [key: string]: { [key: string]: number } } = {};
 
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-        const dateKey = formatDateForInput(currentDate);
+    const [iterY, iterMo, iterD] = startDateInput.split('-').map(Number);
+    const iterDate = new Date(iterY, iterMo - 1, iterD);
+    const [iterEndY, iterEndMo, iterEndD] = endDateInput.split('-').map(Number);
+    const iterEndDate = new Date(iterEndY, iterEndMo - 1, iterEndD);
+    while (iterDate <= iterEndDate) {
+        const dateKey = `${iterDate.getFullYear()}-${String(iterDate.getMonth() + 1).padStart(2, '0')}-${String(iterDate.getDate()).padStart(2, '0')}`;
         dateMap[dateKey] = {
             'bottle-breast-milk': 0,
             'bottle-formula': 0,
@@ -2161,7 +2213,7 @@ async function updateGraph(): Promise<void> {
             'pump': 0,
             'sleep': 0
         };
-        currentDate.setDate(currentDate.getDate() + 1);
+        iterDate.setDate(iterDate.getDate() + 1);
     }
 
     // Collect sleep entries for cross-day calculation
@@ -2170,7 +2222,7 @@ async function updateGraph(): Promise<void> {
     snapshot.forEach(docRef => {
         const data = docRef.data();
         const date = data.startTime.toDate();
-        const dateKey = formatDateForInput(date);
+        const dateKey = formatDateForInput(toTZDate(date));
 
         if (dateMap[dateKey]) {
             if (data.type === 'Feed' && data.subType === 'Breast Milk') {
@@ -2316,13 +2368,11 @@ async function updateGraph(): Promise<void> {
                             const value = context.parsed.y;
                             const seriesName = context.dataset.label.toLowerCase();
 
-                            // Check if it's a diaper series
                             if (seriesName.includes('diaper')) {
                                 label += Math.round(value);
                             } else if (seriesName.includes('sleep')) {
                                 label += value.toFixed(1) + ' hrs';
                             } else {
-                                // For bottles/pumps, round to nearest tenth and add oz
                                 label += value.toFixed(1) + ' oz';
                             }
                             return label;
@@ -2335,12 +2385,10 @@ async function updateGraph(): Promise<void> {
                     beginAtZero: true,
                     ticks: {
                         callback: function (value: any) {
-                            // Check if any selected series is a diaper type
                             const isDiaperOnly = selectedSeries.every(s => s.startsWith('diaper-'));
                             if (isDiaperOnly) {
                                 return Math.round(value);
                             }
-                            // For bottles/pumps, show whole numbers without .0
                             return value % 1 === 0 ? value : value.toFixed(1) + ' oz';
                         }
                     },
@@ -2361,7 +2409,7 @@ async function updateGraph(): Promise<void> {
 function changeWeek(direction: number): void {
     const BIRTH_DATE = new Date(2025, 10, 5);
     const birthWeekStart = getWeekStart(BIRTH_DATE);
-    const today = new Date();
+    const today = nowInTZ();
     const currentWeekStartDate = getWeekStart(today);
 
     const newWeekStart = new Date(currentWeekStart);
@@ -2387,7 +2435,7 @@ function changeWeek(direction: number): void {
 }
 
 function goToCurrentWeek(): void {
-    currentWeekStart = getWeekStart(new Date());
+    currentWeekStart = getWeekStart(nowInTZ());
     loadWeeklyView();
 }
 
@@ -2434,20 +2482,18 @@ function openEditModal(docId: string, data: any): void {
         const editBottleTypeContainer = document.getElementById('edit-bottle-type-container') as HTMLElement;
         const editBottleTypeSelect = document.getElementById('edit-bottle-type') as HTMLSelectElement;
 
-        (document.getElementById('edit-bottle-time') as HTMLInputElement).value = formatDateTime(startTime);
+        (document.getElementById('edit-bottle-time') as HTMLInputElement).value = formatDateTime(toTZDate(startTime));
         editBottleAmount.value = data.amount.toFixed(2);
         editBottleUnit.value = data.unit || 'oz';
         editBottleAmount.dataset.lastUnit = data.unit || 'oz';
         (document.getElementById('edit-bottle-notes') as HTMLTextAreaElement).value = data.notes || '';
 
-        // Show type selector only for Formula
         const indicator = document.getElementById('edit-bottle-type-indicator') as HTMLDivElement;
         const typeText = document.getElementById('edit-bottle-type-text') as HTMLSpanElement;
 
         if (data.subType === 'Formula') {
             editBottleTypeContainer.style.display = 'block';
 
-            // Detect which formula type from notes
             const notes = data.notes || '';
             const firstLine = notes.split('\n')[0];
             if (firstLine === 'Bobbie' || firstLine === 'Enfamil') {
@@ -2471,25 +2517,25 @@ function openEditModal(docId: string, data: any): void {
         }
     } else if (data.type === 'Diaper') {
         editDiaperFields.style.display = 'block';
-        (document.getElementById('edit-diaper-time') as HTMLInputElement).value = formatDateTime(startTime);
+        (document.getElementById('edit-diaper-time') as HTMLInputElement).value = formatDateTime(toTZDate(startTime));
         (document.getElementById('edit-diaper-type') as HTMLSelectElement).value = data.diaperType;
         (document.getElementById('edit-diaper-notes') as HTMLTextAreaElement).value = data.notes || '';
     } else if (data.type === 'Pump') {
         editPumpFields.style.display = 'block';
         const editPumpUnit = document.getElementById('edit-pump-unit') as HTMLSelectElement;
         const editPumpAmount = document.getElementById('edit-pump-amount') as HTMLInputElement;
-        (document.getElementById('edit-pump-start-time') as HTMLInputElement).value = formatDateTime(startTime);
+        (document.getElementById('edit-pump-start-time') as HTMLInputElement).value = formatDateTime(toTZDate(startTime));
         editPumpAmount.value = data.amount.toFixed(2);
         editPumpUnit.value = data.unit || 'oz';
         editPumpAmount.dataset.lastUnit = data.unit || 'oz';
         (document.getElementById('edit-pump-notes') as HTMLTextAreaElement).value = data.notes || '';
     } else if (data.type === 'Sleep') {
         editSleepFields.style.display = 'block';
-        (document.getElementById('edit-sleep-start-time') as HTMLInputElement).value = formatDateTime(startTime);
+        (document.getElementById('edit-sleep-start-time') as HTMLInputElement).value = formatDateTime(toTZDate(startTime));
         if (data.endTime) {
-            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(data.endTime.toDate());
+            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(toTZDate(data.endTime.toDate()));
         } else {
-            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(new Date());
+            (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(nowInTZ());
         }
         (document.getElementById('edit-sleep-notes') as HTMLTextAreaElement).value = data.notes || '';
     }
@@ -2533,7 +2579,7 @@ async function saveEdit(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedTime = new Date(timeInput.value);
+            const selectedTime = parseTZDateTime(timeInput.value);
             if (selectedTime > now) {
                 throw new Error('Cannot set time in the future');
             }
@@ -2541,7 +2587,6 @@ async function saveEdit(): Promise<void> {
                 throw new Error('Amount must be greater than 0');
             }
 
-            // Validate formula type if it's a formula bottle
             if (editBottleTypeContainer.style.display !== 'none' && !editBottleType) {
                 throw new Error('Formula type is required');
             }
@@ -2562,7 +2607,7 @@ async function saveEdit(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedTime = new Date(timeInput.value);
+            const selectedTime = parseTZDateTime(timeInput.value);
             if (selectedTime > now) {
                 throw new Error('Cannot set time in the future');
             }
@@ -2586,7 +2631,7 @@ async function saveEdit(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedStartTime = new Date(startTimeInput.value);
+            const selectedStartTime = parseTZDateTime(startTimeInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot set time in the future');
             }
@@ -2609,7 +2654,7 @@ async function saveEdit(): Promise<void> {
                 throw new Error('Start time is required');
             }
 
-            const selectedStartTime = new Date(startInput.value);
+            const selectedStartTime = parseTZDateTime(startInput.value);
             if (selectedStartTime > now) {
                 throw new Error('Cannot set time in the future');
             }
@@ -2620,7 +2665,7 @@ async function saveEdit(): Promise<void> {
             };
 
             if (endInput.value) {
-                const selectedEndTime = new Date(endInput.value);
+                const selectedEndTime = parseTZDateTime(endInput.value);
                 if (selectedEndTime > now) {
                     throw new Error('End time cannot be in the future');
                 }
@@ -2833,8 +2878,9 @@ function updateLastBottleDisplay(): void {
 
         for (let i = 1; i <= 2; i++) {
             const targetTime = new Date(now.getTime() + (i * 3 * 60 * 60 * 1000));
-            const hours = targetTime.getHours();
-            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const targetTZ = toTZDate(targetTime);
+            const hours = targetTZ.getHours();
+            const minutes = String(targetTZ.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
             const displayHours = hours % 12 || 12;
             projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
@@ -2842,8 +2888,9 @@ function updateLastBottleDisplay(): void {
     } else {
         for (let i = 1; i <= 3; i++) {
             const targetTime = new Date(lastBottleTime.getTime() + (i * 3 * 60 * 60 * 1000));
-            const hours = targetTime.getHours();
-            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const targetTZ = toTZDate(targetTime);
+            const hours = targetTZ.getHours();
+            const minutes = String(targetTZ.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
             const displayHours = hours % 12 || 12;
             projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
@@ -2899,8 +2946,9 @@ function updateLastPumpDisplay(): void {
 
         for (let i = 1; i <= 2; i++) {
             const targetTime = new Date(now.getTime() + (i * 4 * 60 * 60 * 1000));
-            const hours = targetTime.getHours();
-            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const targetTZ = toTZDate(targetTime);
+            const hours = targetTZ.getHours();
+            const minutes = String(targetTZ.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
             const displayHours = hours % 12 || 12;
             projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
@@ -2908,8 +2956,9 @@ function updateLastPumpDisplay(): void {
     } else {
         for (let i = 1; i <= 3; i++) {
             const targetTime = new Date(lastPumpTime.getTime() + (i * 4 * 60 * 60 * 1000));
-            const hours = targetTime.getHours();
-            const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+            const targetTZ = toTZDate(targetTime);
+            const hours = targetTZ.getHours();
+            const minutes = String(targetTZ.getMinutes()).padStart(2, '0');
             const ampm = hours >= 12 ? 'pm' : 'am';
             const displayHours = hours % 12 || 12;
             projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
@@ -2940,7 +2989,6 @@ async function updateLastSleepEndTime(): Promise<void> {
                 localStorage.setItem('lastSleepEndTime', data.endTime.toDate().toISOString());
                 localStorage.removeItem('sleepInProgressStart');
             } else {
-                // Sleep is in progress - store the start time
                 localStorage.removeItem('lastSleepEndTime');
                 localStorage.setItem('sleepInProgressStart', data.startTime.toDate().toISOString());
             }
@@ -2963,13 +3011,11 @@ function updateTimeAwakeDisplay(): void {
     const sleepInProgressStr = localStorage.getItem('sleepInProgressStart');
 
     if (sleepInProgressStr) {
-        // Sleep is in progress - show "Time Asleep" with running counter
         if (labelElement) labelElement.textContent = 'Time Asleep';
         displayElement.textContent = formatTimeDifference(sleepInProgressStr, 'No sleep recorded');
         return;
     }
 
-    // Not sleeping - show "Time Awake"
     if (labelElement) labelElement.textContent = 'Time Awake';
     const lastSleepEndStr = localStorage.getItem('lastSleepEndTime');
     displayElement.textContent = formatTimeDifference(lastSleepEndStr, 'No sleep recorded');
@@ -2977,9 +3023,10 @@ function updateTimeAwakeDisplay(): void {
 
 async function updateNapTime(): Promise<void> {
     try {
-        const now = new Date();
-        const today7am = new Date(now);
-        today7am.setHours(7, 0, 0, 0);
+        const nowTZ = nowInTZ();
+        const today7amTZ = new Date(nowTZ);
+        today7amTZ.setHours(7, 0, 0, 0);
+        const today7am = parseTZDateTime(formatDateTime(today7amTZ));
 
         const q = query(
             collection(db, 'entries'),
@@ -2996,13 +3043,12 @@ async function updateNapTime(): Promise<void> {
             const data = docSnapshot.data();
             const startTime: Date = data.startTime.toDate();
 
-            // Only count entries that started today after 8am
-            if (startTime >= today7am && startTime.toDateString() === now.toDateString()) {
+            const startTimeTZ = toTZDate(startTime);
+            if (startTime >= today7am && startTimeTZ.toDateString() === nowTZ.toDateString()) {
                 if (data.endTime) {
                     const endTime: Date = data.endTime.toDate();
                     completedMs += endTime.getTime() - startTime.getTime();
                 } else {
-                    // Nap in progress
                     inProgressStartTime = startTime.toISOString();
                 }
             }
@@ -3070,7 +3116,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
         initializeUI();
     } else {
-        // Set up passcode event listeners
         document.getElementById('passcode-submit')?.addEventListener('click', checkPasscode);
         document.getElementById('passcode-input')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
