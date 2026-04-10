@@ -10,6 +10,6 @@ git commit -m "updates"
 git push origin main
 
 echo "Deploying to GitHub Pages..."
-git subtree push --prefix dist origin gh-pages
+git push origin `git subtree split --prefix dist main`:gh-pages --force
 
 echo "Deployment complete! Pushed to both main and gh-pages."
