@@ -3,3 +3,4 @@ config
 wm
 scripts
 repomix-output.txt
+CLAUDE.md
