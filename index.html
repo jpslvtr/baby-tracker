@@ -84,8 +84,8 @@
                     <option value="bottle-breast-milk">Bottle - Breast Milk</option>
                     <option value="bottle-formula">Bottle - Formula</option>
                     <option value="diaper">Diaper</option>
-                    <option value="pump">Pump</option>
                     <option value="sleep">Sleep</option>
+                    <option value="solids">Solids</option>
                 </select>
 
                 <div id="bottle-fields" class="entry-fields">
@@ -107,6 +107,7 @@
                             <option value="">Select type...</option>
                             <option value="Bobbie">Bobbie</option>
                             <option value="Enfamil">Enfamil</option>
+                            <option value="Other">Other</option>
                         </select>
                     </div>
 
@@ -133,21 +134,12 @@
                     <textarea id="diaper-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
-                <div id="pump-fields" class="entry-fields">
+                <div id="solids-fields" class="entry-fields">
                     <label>Start Time:</label>
-                    <input type="datetime-local" id="pump-start-time">
-
-                    <label>Amount:</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="number" step="0.01" id="pump-amount" placeholder="0.00" style="flex: 1;">
-                        <select id="pump-unit" style="flex: 0 0 80px;">
-                            <option value="oz">oz</option>
-                            <option value="ml">ml</option>
-                        </select>
-                    </div>
+                    <input type="datetime-local" id="solids-start-time">
 
                     <label>Notes:</label>
-                    <textarea id="pump-notes" placeholder="Optional notes..."></textarea>
+                    <textarea id="solids-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
                 <div id="sleep-fields" class="entry-fields">
@@ -203,6 +195,7 @@
                         <option value="diaper-poo">Diaper - Poo</option>
                         <option value="pump">Pump</option>
                         <option value="sleep">Sleep</option>
+                        <option value="solids">Solids</option>
                     </select>
                     <div style="font-size: 11px; color: #888; margin-top: 6px;">Sleep: prev day 7pm - next day 7am</div>
                     </div>
@@ -235,6 +228,7 @@
                             <option value="">Select type...</option>
                             <option value="Bobbie">Bobbie</option>
                             <option value="Enfamil">Enfamil</option>
+                            <option value="Other">Other</option>
                         </select>
                     </div>
 
@@ -287,6 +281,14 @@
 
                     <label>Notes:</label>
                     <textarea id="edit-sleep-notes" placeholder="Optional notes..."></textarea>
+                </div>
+
+                <div id="edit-solids-fields" style="display: none;">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" id="edit-solids-start-time">
+
+                    <label>Notes:</label>
+                    <textarea id="edit-solids-notes" placeholder="Optional notes..."></textarea>
                 </div>
 
                 <div class="modal-buttons">

@@ -40,6 +40,7 @@ interface Entry {
     amount?: number;
     unit?: string;
     diaperType?: string;
+    formulaType?: string;
     notes: string;
 }
 
@@ -54,6 +55,7 @@ let napTimeTimerInterval: number | null = null;
 let vitaminDDateCheckInterval: number | null = null;
 let dataChart: any = null;
 let weeklyViewVersion = 0;
+let timelineVersion = 0;
 
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
@@ -313,7 +315,6 @@ function setDefaultDateFilters(): void {
 function enforceNumericInputs(): void {
     const amountInputs = [
         document.getElementById('bottle-amount') as HTMLInputElement,
-        document.getElementById('pump-amount') as HTMLInputElement,
         document.getElementById('edit-bottle-amount') as HTMLInputElement,
         document.getElementById('edit-pump-amount') as HTMLInputElement
     ];
@@ -360,8 +361,6 @@ function enforceNumericInputs(): void {
 function setupUnitConversion(): void {
     const bottleUnit = document.getElementById('bottle-unit') as HTMLSelectElement;
     const bottleAmount = document.getElementById('bottle-amount') as HTMLInputElement;
-    const pumpUnit = document.getElementById('pump-unit') as HTMLSelectElement;
-    const pumpAmount = document.getElementById('pump-amount') as HTMLInputElement;
     const editBottleUnit = document.getElementById('edit-bottle-unit') as HTMLSelectElement;
     const editBottleAmount = document.getElementById('edit-bottle-amount') as HTMLInputElement;
     const editPumpUnit = document.getElementById('edit-pump-unit') as HTMLSelectElement;
@@ -370,12 +369,6 @@ function setupUnitConversion(): void {
     if (bottleUnit && bottleAmount) {
         bottleUnit.addEventListener('change', () => {
             convertAmountInInput(bottleAmount, bottleUnit.value);
-        });
-    }
-
-    if (pumpUnit && pumpAmount) {
-        pumpUnit.addEventListener('change', () => {
-            convertAmountInInput(pumpAmount, pumpUnit.value);
         });
     }
 
@@ -461,7 +454,7 @@ function switchTab(tab: string): void {
     } else if (tab === 'weekly') {
         document.getElementById('weekly-tab')?.classList.add('active');
         (document.getElementById('weekly-view') as HTMLElement).style.display = 'block';
-        loadWeeklyView();
+        loadJsonData();
     }
 
     window.scrollTo(0, 0);
@@ -547,12 +540,13 @@ function setupEventListeners(): void {
 
     attachTimeValidation('bottle-time');
     attachTimeValidation('diaper-time');
-    attachTimeValidation('pump-start-time');
+    attachTimeValidation('solids-start-time');
     attachTimeValidation('sleep-start-time');
     attachTimeValidation('edit-bottle-time');
     attachTimeValidation('edit-diaper-time');
     attachTimeValidation('edit-pump-start-time');
     attachTimeValidation('edit-sleep-start-time');
+    attachTimeValidation('edit-solids-start-time');
 
     const graphStartDate = document.getElementById('graph-start-date') as HTMLInputElement;
     const graphEndDate = document.getElementById('graph-end-date') as HTMLInputElement;
@@ -589,7 +583,7 @@ function setDefaultTimes(): void {
 
     const bottleTime = document.getElementById('bottle-time') as HTMLInputElement | null;
     const diaperTime = document.getElementById('diaper-time') as HTMLInputElement | null;
-    const pumpStartTime = document.getElementById('pump-start-time') as HTMLInputElement | null;
+    const solidsStartTime = document.getElementById('solids-start-time') as HTMLInputElement | null;
     const sleepStartTime = document.getElementById('sleep-start-time') as HTMLInputElement | null;
 
     if (bottleTime) {
@@ -598,8 +592,8 @@ function setDefaultTimes(): void {
     if (diaperTime) {
         diaperTime.value = formatted;
     }
-    if (pumpStartTime) {
-        pumpStartTime.value = formatted;
+    if (solidsStartTime) {
+        solidsStartTime.value = formatted;
     }
     if (sleepStartTime) {
         sleepStartTime.value = '';
@@ -640,16 +634,16 @@ function handleEntryTypeChange(event: Event): void {
 
     const bottleFields = document.getElementById('bottle-fields') as HTMLElement;
     const diaperFields = document.getElementById('diaper-fields') as HTMLElement;
-    const pumpFields = document.getElementById('pump-fields') as HTMLElement;
     const sleepFields = document.getElementById('sleep-fields') as HTMLElement;
+    const solidsFields = document.getElementById('solids-fields') as HTMLElement;
     const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
     const statusDiv = document.getElementById('submit-status') as HTMLDivElement;
     const bottleTypeContainer = document.getElementById('bottle-type-container') as HTMLElement;
 
     bottleFields.style.display = 'none';
     diaperFields.style.display = 'none';
-    pumpFields.style.display = 'none';
     sleepFields.style.display = 'none';
+    solidsFields.style.display = 'none';
     bottleTypeContainer.style.display = 'none';
     statusDiv.style.display = 'none';
 
@@ -666,21 +660,16 @@ function handleEntryTypeChange(event: Event): void {
     } else if (value === 'diaper') {
         diaperFields.style.display = 'block';
         submitButton.style.display = 'block';
-    } else if (value === 'pump') {
-        pumpFields.style.display = 'block';
-        submitButton.style.display = 'block';
-        const pumpUnit = document.getElementById('pump-unit') as HTMLSelectElement;
-        const pumpAmount = document.getElementById('pump-amount') as HTMLInputElement;
-        pumpAmount.dataset.lastUnit = pumpUnit.value;
     } else if (value === 'sleep') {
         sleepFields.style.display = 'block';
         submitButton.style.display = 'block';
         checkOngoingSleep();
+    } else if (value === 'solids') {
+        solidsFields.style.display = 'block';
+        submitButton.style.display = 'block';
     } else {
         submitButton.style.display = 'none';
     }
-
-    setDefaultTimes();
 
     setDefaultTimes();
 }
@@ -699,7 +688,16 @@ function handleBottleTypeChange(event: Event): void {
 
     const firstLineIsType = lines.length > 0 && (lines[0] === 'Bobbie' || lines[0] === 'Enfamil');
 
-    if (selectedType) {
+    if (selectedType === 'Other') {
+        if (firstLineIsType) {
+            lines.splice(0, 1);
+            notesTextarea.value = lines.join('\n');
+        }
+        if (indicator && typeText) {
+            typeText.textContent = 'Other';
+            indicator.style.display = 'block';
+        }
+    } else if (selectedType) {
         if (firstLineIsType) {
             lines[0] = selectedType;
             notesTextarea.value = lines.join('\n');
@@ -737,7 +735,16 @@ function handleEditBottleTypeChange(event: Event): void {
 
     const firstLineIsType = lines.length > 0 && (lines[0] === 'Bobbie' || lines[0] === 'Enfamil');
 
-    if (selectedType) {
+    if (selectedType === 'Other') {
+        if (firstLineIsType) {
+            lines.splice(0, 1);
+            notesTextarea.value = lines.join('\n');
+        }
+        if (indicator && typeText) {
+            typeText.textContent = 'Other';
+            indicator.style.display = 'block';
+        }
+    } else if (selectedType) {
         if (firstLineIsType) {
             lines[0] = selectedType;
             notesTextarea.value = lines.join('\n');
@@ -768,7 +775,7 @@ function protectBottleNotesFirstLine(): void {
 
     notesTextarea.addEventListener('input', () => {
         const selectedType = bottleTypeSelect.value;
-        if (!selectedType) return;
+        if (!selectedType || selectedType === 'Other') return;
 
         const currentValue = notesTextarea.value;
         const lines = currentValue.split('\n');
@@ -789,7 +796,7 @@ function protectBottleNotesFirstLine(): void {
 
     notesTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
         const selectedType = bottleTypeSelect.value;
-        if (!selectedType) return;
+        if (!selectedType || selectedType === 'Other') return;
 
         const textarea = e.target as HTMLTextAreaElement;
         const cursorPos = textarea.selectionStart;
@@ -834,7 +841,7 @@ function protectBottleNotesFirstLine(): void {
 
     notesTextarea.addEventListener('paste', (e: ClipboardEvent) => {
         const selectedType = bottleTypeSelect.value;
-        if (!selectedType) return;
+        if (!selectedType || selectedType === 'Other') return;
 
         const textarea = e.target as HTMLTextAreaElement;
         const cursorPos = textarea.selectionStart;
@@ -855,7 +862,7 @@ function protectEditBottleNotesFirstLine(): void {
 
     notesTextarea.addEventListener('input', () => {
         const selectedType = bottleTypeSelect.value;
-        if (!selectedType) return;
+        if (!selectedType || selectedType === 'Other') return;
 
         const currentValue = notesTextarea.value;
         const lines = currentValue.split('\n');
@@ -876,7 +883,7 @@ function protectEditBottleNotesFirstLine(): void {
 
     notesTextarea.addEventListener('keydown', (e: KeyboardEvent) => {
         const selectedType = bottleTypeSelect.value;
-        if (!selectedType) return;
+        if (!selectedType || selectedType === 'Other') return;
 
         const textarea = e.target as HTMLTextAreaElement;
         const cursorPos = textarea.selectionStart;
@@ -921,7 +928,7 @@ function protectEditBottleNotesFirstLine(): void {
 
     notesTextarea.addEventListener('paste', (e: ClipboardEvent) => {
         const selectedType = bottleTypeSelect.value;
-        if (!selectedType) return;
+        if (!selectedType || selectedType === 'Other') return;
 
         const textarea = e.target as HTMLTextAreaElement;
         const cursorPos = textarea.selectionStart;
@@ -968,12 +975,17 @@ async function handleSubmitEntry(): Promise<void> {
                 }
             }
 
+            const formulaType = entryType === 'bottle-formula'
+                ? (document.getElementById('bottle-type') as HTMLSelectElement).value
+                : undefined;
+
             entry = {
                 type: 'Feed',
                 subType: entryType === 'bottle-breast-milk' ? 'Breast Milk' : 'Formula',
                 startTime: selectedTime,
                 amount: amount,
                 unit: unit,
+                formulaType: formulaType,
                 notes: notes
             };
         } else if (entryType === 'diaper') {
@@ -1000,14 +1012,11 @@ async function handleSubmitEntry(): Promise<void> {
                 startTime: selectedTime,
                 notes: notes
             };
-        } else if (entryType === 'pump') {
-            const startTimeInput = document.getElementById('pump-start-time') as HTMLInputElement;
-            const startTime = startTimeInput.value;
-            const amount = parseFloat((document.getElementById('pump-amount') as HTMLInputElement).value);
-            const unit = (document.getElementById('pump-unit') as HTMLSelectElement).value;
-            const notes = (document.getElementById('pump-notes') as HTMLTextAreaElement).value;
+        } else if (entryType === 'solids') {
+            const startTimeInput = document.getElementById('solids-start-time') as HTMLInputElement;
+            const notes = (document.getElementById('solids-notes') as HTMLTextAreaElement).value;
 
-            if (!startTime) {
+            if (!startTimeInput.value) {
                 throw new Error('Start time is required');
             }
 
@@ -1015,15 +1024,10 @@ async function handleSubmitEntry(): Promise<void> {
             if (selectedStartTime > now) {
                 throw new Error('Cannot add entries in the future');
             }
-            if (isNaN(amount) || amount <= 0) {
-                throw new Error('Amount must be greater than 0');
-            }
 
             entry = {
-                type: 'Pump',
+                type: 'Solids',
                 startTime: selectedStartTime,
-                amount: amount,
-                unit: unit,
                 notes: notes
             };
         } else if (entryType === 'sleep') {
@@ -1091,8 +1095,6 @@ async function handleSubmitEntry(): Promise<void> {
                 await updateLastBottleTime();
             } else if (entry.type === 'Diaper') {
                 await updateLastDiaperTimes();
-            } else if (entry.type === 'Pump') {
-                await updateLastPumpTime();
             } else if (entry.type === 'Sleep') {
                 await updateLastSleepEndTime();
                 await updateNapTime();
@@ -1117,15 +1119,14 @@ function clearForm(): void {
     (document.getElementById('bottle-type') as HTMLSelectElement).value = '';
     (document.getElementById('bottle-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('diaper-notes') as HTMLTextAreaElement).value = '';
-    (document.getElementById('pump-amount') as HTMLInputElement).value = '';
-    (document.getElementById('pump-notes') as HTMLTextAreaElement).value = '';
+    (document.getElementById('solids-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('sleep-end-time') as HTMLInputElement).value = '';
     (document.getElementById('sleep-notes') as HTMLTextAreaElement).value = '';
 
     (document.getElementById('bottle-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('bottle-type-container') as HTMLElement).style.display = 'none';
     (document.getElementById('diaper-fields') as HTMLElement).style.display = 'none';
-    (document.getElementById('pump-fields') as HTMLElement).style.display = 'none';
+    (document.getElementById('solids-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('sleep-fields') as HTMLElement).style.display = 'none';
     (document.getElementById('submit-entry') as HTMLButtonElement).style.display = 'none';
 
@@ -1166,6 +1167,7 @@ function handleQuickFilter(filterType: string): void {
 }
 
 async function loadTimeline(): Promise<void> {
+    const thisVersion = ++timelineVersion;
     const timelineList = document.getElementById('timeline-list') as HTMLDivElement;
     const loadingDiv = document.getElementById('timeline-loading') as HTMLDivElement;
     const startDateInput = (document.getElementById('start-date-filter') as HTMLInputElement).value;
@@ -1198,6 +1200,7 @@ async function loadTimeline(): Promise<void> {
         }
 
         const snapshot = await getDocs(q);
+        if (thisVersion !== timelineVersion) return;
 
         // Fetch prior-evening sleep entries (from 7pm the day before start date)
         // so the timeline list shows overnight sleep that belongs to the sleep day
@@ -1225,6 +1228,7 @@ async function loadTimeline(): Promise<void> {
                 console.error('Error fetching prior evening sleep:', e);
             }
         }
+        if (thisVersion !== timelineVersion) return;
 
         // Merge prior evening sleep docs into a combined list for rendering
         const allTimelineDocs: { id: string; data: any }[] = [];
@@ -1247,7 +1251,6 @@ async function loadTimeline(): Promise<void> {
         const summaryStats = {
             bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
             diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
-            pumps: { total: 0, sessions: 0 },
             sleep: { totalMs: 0, sessions: 0 }
         };
 
@@ -1271,6 +1274,8 @@ async function loadTimeline(): Promise<void> {
                         entryType = 'pump';
                     } else if (data.type === 'Sleep') {
                         entryType = 'sleep';
+                    } else if (data.type === 'Solids') {
+                        entryType = 'solids';
                     }
 
                     if (typeFilter === 'bottle-all') {
@@ -1312,10 +1317,6 @@ async function loadTimeline(): Promise<void> {
                     } else if (data.diaperType === 'Mixed') {
                         summaryStats.diapers.mixed++;
                     }
-                } else if (data.type === 'Pump') {
-                    const amount = convertToOz(data.amount, data.unit);
-                    summaryStats.pumps.total += amount;
-                    summaryStats.pumps.sessions++;
                 } else if (data.type === 'Sleep') {
                     summaryStats.sleep.sessions++;
                 }
@@ -1353,6 +1354,9 @@ async function loadTimeline(): Promise<void> {
                 } else if (data.type === 'Pump') {
                     detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}</div>`;
                     backgroundColor = '#e2daf2';
+                } else if (data.type === 'Solids') {
+                    typeDisplay = 'Solids';
+                    backgroundColor = '#f5e6d0';
                 } else if (data.type === 'Sleep') {
                     typeDisplay = 'Sleep';
                     backgroundColor = '#d4e8d4';
@@ -1472,6 +1476,7 @@ async function loadTimeline(): Promise<void> {
                 summaryDiv.className = 'filter-summary';
 
                 let summaryHTML = '<div class="summary-header">Summary</div><div class="summary-stats">';
+                let hasSummaryContent = false;
 
                 if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula' || typeFilter === 'bottle-all') {
                     summaryHTML += `
@@ -1483,6 +1488,7 @@ async function loadTimeline(): Promise<void> {
                             <div class="stat-line">Total volume: ${formatBothUnits(summaryStats.bottles.total, 'oz')}</div>
                         </div>
                     `;
+                    hasSummaryContent = true;
                 }
 
                 if (typeFilter === 'all' || typeFilter === 'diaper-all' || typeFilter === 'diaper-pee' || typeFilter === 'diaper-poo') {
@@ -1496,16 +1502,7 @@ async function loadTimeline(): Promise<void> {
                             <div class="stat-line">Poo: ${totalPoo}</div>
                         </div>
                     `;
-                }
-
-                if (typeFilter === 'all' || typeFilter === 'pump') {
-                    summaryHTML += `
-                        <div class="stat-group">
-                            <div class="stat-group-title">Pumps</div>
-                            <div class="stat-line">Total volume: ${formatBothUnits(summaryStats.pumps.total, 'oz')}</div>
-                            <div class="stat-line">Number of sessions: ${summaryStats.pumps.sessions}</div>
-                        </div>
-                    `;
+                    hasSummaryContent = true;
                 }
 
                 if (typeFilter === 'all' || typeFilter === 'sleep') {
@@ -1601,21 +1598,28 @@ async function loadTimeline(): Promise<void> {
                             <div class="stat-line" style="font-size: 11px; color: #888;">prev day 7pm - next day 7am</div>
                         </div>
                     `;
+                    hasSummaryContent = true;
                 }
 
                 summaryHTML += '</div>';
-                summaryDiv.innerHTML = summaryHTML;
 
-                const filterSection = document.querySelector('.filter-section');
-                if (filterSection && filterSection.parentNode) {
-                    filterSection.parentNode.insertBefore(summaryDiv, timelineList);
+                if (thisVersion === timelineVersion && hasSummaryContent) {
+                    summaryDiv.innerHTML = summaryHTML;
+                    const filterSection = document.querySelector('.filter-section');
+                    if (filterSection && filterSection.parentNode) {
+                        filterSection.parentNode.insertBefore(summaryDiv, timelineList);
+                    }
                 }
             }
         }
     } catch (error) {
-        timelineList.innerHTML = '<p class="error">Failed to load timeline</p>';
+        if (thisVersion === timelineVersion) {
+            timelineList.innerHTML = '<p class="error">Failed to load timeline</p>';
+        }
     } finally {
-        loadingDiv.style.display = 'none';
+        if (thisVersion === timelineVersion) {
+            loadingDiv.style.display = 'none';
+        }
     }
 }
 
@@ -1829,7 +1833,6 @@ async function loadWeeklyView(): Promise<void> {
                 vitaminD: date >= vitaminDStartDate ? (vitaminDMap[dateKeyFormatted] === true) : null,
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
-                pumps: { total: 0, sessions: 0 },
                 sleepMs: computeDaySleepMs(allSleepEntries, sleepBounds.start, sleepBounds.end)
             };
         }
@@ -1862,10 +1865,6 @@ async function loadWeeklyView(): Promise<void> {
                     } else if (data.diaperType === 'Mixed') {
                         dayStats[dateKey].diapers.mixed++;
                     }
-                } else if (data.type === 'Pump') {
-                    const amount = convertToOz(data.amount, data.unit);
-                    dayStats[dateKey].pumps.total += amount;
-                    dayStats[dateKey].pumps.sessions++;
                 }
             }
         });
@@ -1925,11 +1924,6 @@ async function loadWeeklyView(): Promise<void> {
                     <div class="stat-line">Poo: ${totalPoo}</div>
                 </div>
                 <div class="stat-group">
-                    <div class="stat-group-title">Pumps</div>
-                    <div class="stat-line">Total volume: ${formatBothUnits(stats.pumps.total, 'oz')}</div>
-                    <div class="stat-line">Number of sessions: ${stats.pumps.sessions}</div>
-                </div>
-                <div class="stat-group">
                     <div class="stat-group-title">Sleep</div>
                     <div class="stat-line">Total: ${formatSleepDuration(stats.sleepMs)}</div>
                     <div class="stat-line" style="font-size: 11px; color: #888;">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(stats.date.getDay() + 6) % 7]} 7pm - ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(stats.date.getDay() + 1) % 7]} 7am</div>
@@ -1963,7 +1957,6 @@ async function loadWeeklyView(): Promise<void> {
     } finally {
         if (thisVersion === weeklyViewVersion) {
             loadingDiv.style.display = 'none';
-            await loadJsonData();
         }
     }
 }
@@ -2000,6 +1993,12 @@ async function loadJsonData(): Promise<void> {
                     startTime: data.startTime.toDate().toISOString(),
                     amount: data.amount,
                     unit: data.unit,
+                    notes: data.notes || ''
+                });
+            } else if (data.type === 'Solids') {
+                feedsData.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
                     notes: data.notes || ''
                 });
             } else if (data.type === 'Diaper') {
@@ -2467,11 +2466,13 @@ function openEditModal(docId: string, data: any): void {
     const editDiaperFields = document.getElementById('edit-diaper-fields') as HTMLElement;
     const editPumpFields = document.getElementById('edit-pump-fields') as HTMLElement;
     const editSleepFields = document.getElementById('edit-sleep-fields') as HTMLElement;
+    const editSolidsFields = document.getElementById('edit-solids-fields') as HTMLElement;
 
     editBottleFields.style.display = 'none';
     editDiaperFields.style.display = 'none';
     editPumpFields.style.display = 'none';
     editSleepFields.style.display = 'none';
+    editSolidsFields.style.display = 'none';
 
     const startTime = data.startTime.toDate();
 
@@ -2494,19 +2495,23 @@ function openEditModal(docId: string, data: any): void {
         if (data.subType === 'Formula') {
             editBottleTypeContainer.style.display = 'block';
 
-            const notes = data.notes || '';
-            const firstLine = notes.split('\n')[0];
-            if (firstLine === 'Bobbie' || firstLine === 'Enfamil') {
-                editBottleTypeSelect.value = firstLine;
-                if (indicator && typeText) {
-                    typeText.textContent = firstLine;
-                    indicator.style.display = 'block';
-                }
+            let detectedType = '';
+            if (data.formulaType) {
+                detectedType = data.formulaType;
             } else {
-                editBottleTypeSelect.value = '';
-                if (indicator) {
-                    indicator.style.display = 'none';
+                const notes = data.notes || '';
+                const firstLine = notes.split('\n')[0];
+                if (firstLine === 'Bobbie' || firstLine === 'Enfamil') {
+                    detectedType = firstLine;
                 }
+            }
+
+            editBottleTypeSelect.value = detectedType;
+            if (detectedType && indicator && typeText) {
+                typeText.textContent = detectedType;
+                indicator.style.display = 'block';
+            } else if (indicator) {
+                indicator.style.display = 'none';
             }
         } else {
             editBottleTypeContainer.style.display = 'none';
@@ -2538,6 +2543,10 @@ function openEditModal(docId: string, data: any): void {
             (document.getElementById('edit-sleep-end-time') as HTMLInputElement).value = formatDateTime(nowInTZ());
         }
         (document.getElementById('edit-sleep-notes') as HTMLTextAreaElement).value = data.notes || '';
+    } else if (data.type === 'Solids') {
+        editSolidsFields.style.display = 'block';
+        (document.getElementById('edit-solids-start-time') as HTMLInputElement).value = formatDateTime(toTZDate(startTime));
+        (document.getElementById('edit-solids-notes') as HTMLTextAreaElement).value = data.notes || '';
     }
 
     modal.style.display = 'block';
@@ -2562,6 +2571,7 @@ async function saveEdit(): Promise<void> {
         const editDiaperFields = document.getElementById('edit-diaper-fields') as HTMLElement;
         const editPumpFields = document.getElementById('edit-pump-fields') as HTMLElement;
         const editSleepFields = document.getElementById('edit-sleep-fields') as HTMLElement;
+        const editSolidsFields = document.getElementById('edit-solids-fields') as HTMLElement;
 
         let updateData: any = {};
         const now = new Date();
@@ -2595,7 +2605,8 @@ async function saveEdit(): Promise<void> {
                 startTime: Timestamp.fromDate(selectedTime),
                 amount: amount,
                 unit: unit,
-                notes: notes
+                notes: notes,
+                formulaType: editBottleType || null
             };
         } else if (editDiaperFields.style.display === 'block') {
             const timeInput = document.getElementById('edit-diaper-time') as HTMLInputElement;
@@ -2676,6 +2687,23 @@ async function saveEdit(): Promise<void> {
             } else {
                 updateData.endTime = null;
             }
+        } else if (editSolidsFields.style.display === 'block') {
+            const startTimeInput = document.getElementById('edit-solids-start-time') as HTMLInputElement;
+            const notes = (document.getElementById('edit-solids-notes') as HTMLTextAreaElement).value;
+
+            if (!startTimeInput.value) {
+                throw new Error('Start time is required');
+            }
+
+            const selectedStartTime = parseTZDateTime(startTimeInput.value);
+            if (selectedStartTime > now) {
+                throw new Error('Cannot set time in the future');
+            }
+
+            updateData = {
+                startTime: Timestamp.fromDate(selectedStartTime),
+                notes: notes
+            };
         }
 
         await updateDoc(doc(db, 'entries', currentEditingEntryId), updateData);
@@ -2769,7 +2797,8 @@ async function updateLastDiaperTimes(): Promise<void> {
         const q = query(
             collection(db, 'entries'),
             where('type', '==', 'Diaper'),
-            orderBy('startTime', 'desc')
+            orderBy('startTime', 'desc'),
+            limit(30)
         );
         const snapshot = await getDocs(q);
 
