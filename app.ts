@@ -47,12 +47,14 @@ interface Entry {
 let currentWeekStart: Date = getWeekStart(new Date());
 let currentEditingEntryId: string | null = null;
 let lastBottleTimerInterval: number | null = null;
+let lastSolidsTimerInterval: number | null = null;
 let lastPeeTimerInterval: number | null = null;
 let lastPooTimerInterval: number | null = null;
 let lastPumpTimerInterval: number | null = null;
 let timeAwakeTimerInterval: number | null = null;
 let napTimeTimerInterval: number | null = null;
 let vitaminDDateCheckInterval: number | null = null;
+let napTimeMidnightInterval: number | null = null;
 let dataChart: any = null;
 let weeklyViewVersion = 0;
 let timelineVersion = 0;
@@ -231,6 +233,25 @@ function scheduleNextMidnightCheck(): void {
     }, msUntilMidnight);
 }
 
+function scheduleNapTimeReset(): void {
+    if (napTimeMidnightInterval) {
+        clearTimeout(napTimeMidnightInterval);
+    }
+
+    const now = new Date();
+    const nowTZ = nowInTZ();
+    const tomorrowTZ = new Date(nowTZ);
+    tomorrowTZ.setDate(tomorrowTZ.getDate() + 1);
+    tomorrowTZ.setHours(0, 0, 0, 0);
+    const midnightUTC = parseTZDateTime(formatDateTime(tomorrowTZ));
+    const msUntilMidnight = midnightUTC.getTime() - now.getTime();
+
+    napTimeMidnightInterval = window.setTimeout(() => {
+        updateNapTime();
+        scheduleNapTimeReset();
+    }, msUntilMidnight);
+}
+
 async function handleVitaminDChange(event: Event): Promise<void> {
     const checkbox = event.target as HTMLInputElement;
     const statusDiv = document.getElementById('vitamin-d-status') as HTMLDivElement;
@@ -296,6 +317,7 @@ function initializeUI(): void {
     setupUnitConversion();
     loadVitaminDStatus();
     scheduleNextMidnightCheck();
+    scheduleNapTimeReset();
     window.scrollTo(0, 0);
 }
 
@@ -1091,8 +1113,10 @@ async function handleSubmitEntry(): Promise<void> {
 
             clearForm();
 
-            if (entry.type === 'Feed' || entry.type === 'Solids') {
+            if (entry.type === 'Feed') {
                 await updateLastBottleTime();
+            } else if (entry.type === 'Solids') {
+                await updateLastSolidsTime();
             } else if (entry.type === 'Diaper') {
                 await updateLastDiaperTimes();
             } else if (entry.type === 'Sleep') {
@@ -2748,6 +2772,7 @@ async function startAllTimers(): Promise<void> {
     await updateAllEventTimes();
 
     if (lastBottleTimerInterval) clearInterval(lastBottleTimerInterval);
+    if (lastSolidsTimerInterval) clearInterval(lastSolidsTimerInterval);
     if (lastPeeTimerInterval) clearInterval(lastPeeTimerInterval);
     if (lastPooTimerInterval) clearInterval(lastPooTimerInterval);
     if (lastPumpTimerInterval) clearInterval(lastPumpTimerInterval);
@@ -2755,6 +2780,7 @@ async function startAllTimers(): Promise<void> {
     if (napTimeTimerInterval) clearInterval(napTimeTimerInterval);
 
     lastBottleTimerInterval = window.setInterval(() => updateLastBottleDisplay(), 1000);
+    lastSolidsTimerInterval = window.setInterval(() => updateLastSolidsDisplay(), 1000);
     lastPeeTimerInterval = window.setInterval(() => updateLastPeeDisplay(), 1000);
     lastPooTimerInterval = window.setInterval(() => updateLastPooDisplay(), 1000);
     lastPumpTimerInterval = window.setInterval(() => updateLastPumpDisplay(), 1000);
@@ -2765,6 +2791,7 @@ async function startAllTimers(): Promise<void> {
 async function updateAllEventTimes(): Promise<void> {
     await Promise.all([
         updateLastBottleTime(),
+        updateLastSolidsTime(),
         updateLastDiaperTimes(),
         updateLastPumpTime(),
         updateLastSleepEndTime(),
@@ -2780,36 +2807,48 @@ async function updateLastBottleTime(): Promise<void> {
             orderBy('startTime', 'desc'),
             limit(1)
         );
-        const solidsQ = query(
-            collection(db, 'entries'),
-            where('type', '==', 'Solids'),
-            orderBy('startTime', 'desc'),
-            limit(1)
-        );
-        const [feedSnap, solidsSnap] = await Promise.all([getDocs(feedQ), getDocs(solidsQ)]);
-
-        let lastFeedTime: Date | null = null;
+        const feedSnap = await getDocs(feedQ);
 
         if (!feedSnap.empty) {
-            lastFeedTime = feedSnap.docs[0].data().startTime.toDate();
-        }
-        if (!solidsSnap.empty) {
-            const solidsTime = solidsSnap.docs[0].data().startTime.toDate();
-            if (!lastFeedTime || solidsTime > lastFeedTime) {
-                lastFeedTime = solidsTime;
-            }
-        }
-
-        if (lastFeedTime) {
-            localStorage.setItem('lastBottleTime', lastFeedTime.toISOString());
+            localStorage.setItem('lastBottleTime', feedSnap.docs[0].data().startTime.toDate().toISOString());
         } else {
             localStorage.removeItem('lastBottleTime');
         }
 
         updateLastBottleDisplay();
     } catch (error) {
-        console.error('Error fetching last feed time:', error);
+        console.error('Error fetching last bottle time:', error);
     }
+}
+
+async function updateLastSolidsTime(): Promise<void> {
+    try {
+        const solidsQ = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Solids'),
+            orderBy('startTime', 'desc'),
+            limit(1)
+        );
+        const solidsSnap = await getDocs(solidsQ);
+
+        if (!solidsSnap.empty) {
+            localStorage.setItem('lastSolidsTime', solidsSnap.docs[0].data().startTime.toDate().toISOString());
+        } else {
+            localStorage.removeItem('lastSolidsTime');
+        }
+
+        updateLastSolidsDisplay();
+    } catch (error) {
+        console.error('Error fetching last solids time:', error);
+    }
+}
+
+function updateLastSolidsDisplay(): void {
+    const displayElement = document.getElementById('last-solids-value') as HTMLElement;
+    if (!displayElement) return;
+
+    const lastSolidsTimeStr = localStorage.getItem('lastSolidsTime');
+    displayElement.textContent = formatTimeDifference(lastSolidsTimeStr, 'No solids recorded');
 }
 
 async function updateLastDiaperTimes(): Promise<void> {
@@ -2909,7 +2948,7 @@ function updateLastBottleDisplay(): void {
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
 
     if (!lastBottleTimeStr) {
-        displayElement.innerHTML = 'No feeds recorded';
+        displayElement.innerHTML = 'No bottles recorded';
         return;
     }
 
