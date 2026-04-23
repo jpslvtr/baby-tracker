@@ -1091,7 +1091,7 @@ async function handleSubmitEntry(): Promise<void> {
 
             clearForm();
 
-            if (entry.type === 'Feed') {
+            if (entry.type === 'Feed' || entry.type === 'Solids') {
                 await updateLastBottleTime();
             } else if (entry.type === 'Diaper') {
                 await updateLastDiaperTimes();
@@ -1602,8 +1602,8 @@ async function loadTimeline(): Promise<void> {
                     summaryHTML += `
                         <div class="stat-group">
                             <div class="stat-group-title">Sleep</div>
-                            <div class="stat-line">Total sleep: ${sleepHrs}h ${sleepMins}m</div>
-                            <div class="stat-line">Number of sleeps: ${summaryStats.sleep.sessions}</div>
+                            <div class="stat-line">Total Sleep: ${sleepHrs}h ${sleepMins}m</div>
+                            <div class="stat-line">Number of Sleeps: ${summaryStats.sleep.sessions}</div>
                             <div class="stat-line" style="font-size: 11px; color: #888;">prev day 7pm - next day 7am</div>
                         </div>
                     `;
@@ -2783,25 +2783,41 @@ async function updateAllEventTimes(): Promise<void> {
 
 async function updateLastBottleTime(): Promise<void> {
     try {
-        const q = query(
+        const feedQ = query(
             collection(db, 'entries'),
             where('type', '==', 'Feed'),
             orderBy('startTime', 'desc'),
             limit(1)
         );
-        const snapshot = await getDocs(q);
+        const solidsQ = query(
+            collection(db, 'entries'),
+            where('type', '==', 'Solids'),
+            orderBy('startTime', 'desc'),
+            limit(1)
+        );
+        const [feedSnap, solidsSnap] = await Promise.all([getDocs(feedQ), getDocs(solidsQ)]);
 
-        if (!snapshot.empty) {
-            const lastBottleData = snapshot.docs[0].data();
-            const lastBottleTime = lastBottleData.startTime.toDate();
-            localStorage.setItem('lastBottleTime', lastBottleTime.toISOString());
+        let lastFeedTime: Date | null = null;
+
+        if (!feedSnap.empty) {
+            lastFeedTime = feedSnap.docs[0].data().startTime.toDate();
+        }
+        if (!solidsSnap.empty) {
+            const solidsTime = solidsSnap.docs[0].data().startTime.toDate();
+            if (!lastFeedTime || solidsTime > lastFeedTime) {
+                lastFeedTime = solidsTime;
+            }
+        }
+
+        if (lastFeedTime) {
+            localStorage.setItem('lastBottleTime', lastFeedTime.toISOString());
         } else {
             localStorage.removeItem('lastBottleTime');
         }
 
         updateLastBottleDisplay();
     } catch (error) {
-        console.error('Error fetching last bottle time:', error);
+        console.error('Error fetching last feed time:', error);
     }
 }
 
@@ -2902,7 +2918,7 @@ function updateLastBottleDisplay(): void {
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
 
     if (!lastBottleTimeStr) {
-        displayElement.innerHTML = 'No bottles recorded';
+        displayElement.innerHTML = 'No feeds recorded';
         return;
     }
 
