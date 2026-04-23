@@ -1723,49 +1723,75 @@ async function loadWeeklyView(): Promise<void> {
     weeklyStats.innerHTML = '';
 
     try {
-        const q = query(
-            collection(db, 'entries'),
-            where('startTime', '>=', Timestamp.fromDate(currentWeekStart)),
-            where('startTime', '<=', Timestamp.fromDate(weekEnd)),
-            orderBy('startTime', 'asc')
-        );
-        const snapshot = await getDocs(q);
-
-        if (thisVersion !== weeklyViewVersion) return;
-
+        // Build all query parameters before firing any requests
         const vitaminDStartDate = new Date('2025-11-11');
         vitaminDStartDate.setHours(0, 0, 0, 0);
 
-        const vitaminDMap: { [key: string]: boolean } = {};
         const dateKeysToCheck: string[] = [];
-
         for (let i = 0; i < 7; i++) {
             const date = new Date(currentWeekStart);
             date.setDate(date.getDate() + i);
             date.setHours(0, 0, 0, 0);
-
             if (date >= vitaminDStartDate) {
-                const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                dateKeysToCheck.push(dateKey);
+                dateKeysToCheck.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
             }
         }
 
-        if (dateKeysToCheck.length > 0) {
-            const vitaminDDocs = await Promise.all(
-                dateKeysToCheck.map(dateKey => getDoc(doc(db, 'vitaminD', dateKey)))
-            );
+        const priorSleepStart = new Date(currentWeekStart);
+        priorSleepStart.setDate(priorSleepStart.getDate() - 1);
+        priorSleepStart.setHours(0, 0, 0, 0);
+        const priorSleepEnd = new Date(currentWeekStart);
+        priorSleepEnd.setHours(0, 0, 0, 0);
 
-            dateKeysToCheck.forEach((dateKey, index) => {
-                const vitaminDDoc = vitaminDDocs[index];
-                vitaminDMap[dateKey] = vitaminDDoc.exists() && vitaminDDoc.data()?.given === true;
-            });
-        }
+        const postSleepStart = new Date(weekEnd);
+        postSleepStart.setDate(postSleepStart.getDate() + 1);
+        postSleepStart.setHours(0, 0, 0, 0);
+        const postSleepEnd = new Date(postSleepStart);
+        postSleepEnd.setDate(postSleepEnd.getDate() + 1);
+        postSleepEnd.setHours(0, 0, 0, 0);
 
+        // Fire all Firestore requests in parallel — none depend on each other
+        const allPromises: Promise<any>[] = [
+            getDocs(query(
+                collection(db, 'entries'),
+                where('startTime', '>=', Timestamp.fromDate(currentWeekStart)),
+                where('startTime', '<=', Timestamp.fromDate(weekEnd)),
+                orderBy('startTime', 'asc')
+            )),
+            getDocs(query(
+                collection(db, 'entries'),
+                where('type', '==', 'Sleep'),
+                where('startTime', '>=', Timestamp.fromDate(priorSleepStart)),
+                where('startTime', '<', Timestamp.fromDate(priorSleepEnd)),
+                orderBy('startTime', 'asc')
+            )),
+            getDocs(query(
+                collection(db, 'entries'),
+                where('type', '==', 'Sleep'),
+                where('startTime', '>=', Timestamp.fromDate(postSleepStart)),
+                where('startTime', '<', Timestamp.fromDate(postSleepEnd)),
+                orderBy('startTime', 'asc')
+            )),
+            ...dateKeysToCheck.map(dateKey => getDoc(doc(db, 'vitaminD', dateKey)))
+        ];
+
+        const allResults = await Promise.all(allPromises);
         if (thisVersion !== weeklyViewVersion) return;
+
+        const snapshot = allResults[0];
+        const priorSleepSnapshot = allResults[1];
+        const postSleepSnapshot = allResults[2];
+        const vitaminDDocResults = allResults.slice(3);
+
+        const vitaminDMap: { [key: string]: boolean } = {};
+        dateKeysToCheck.forEach((dateKey, index) => {
+            const vitaminDDoc = vitaminDDocResults[index];
+            vitaminDMap[dateKey] = vitaminDDoc.exists() && vitaminDDoc.data()?.given === true;
+        });
 
         // Collect all sleep entries for sleep day calculation
         const allSleepEntries: { startTime: Date; endTime: Date | null }[] = [];
-        snapshot.forEach(docSnapshot => {
+        snapshot.forEach((docSnapshot: any) => {
             const data = docSnapshot.data();
             if (data.type === 'Sleep') {
                 allSleepEntries.push({
@@ -1775,24 +1801,7 @@ async function loadWeeklyView(): Promise<void> {
             }
         });
 
-        // Fetch sleep entries from the day before the week
-        const priorSleepStart = new Date(currentWeekStart);
-        priorSleepStart.setDate(priorSleepStart.getDate() - 1);
-        priorSleepStart.setHours(0, 0, 0, 0);
-        const priorSleepEnd = new Date(currentWeekStart);
-        priorSleepEnd.setHours(0, 0, 0, 0);
-
-        const priorSleepQuery = query(
-            collection(db, 'entries'),
-            where('type', '==', 'Sleep'),
-            where('startTime', '>=', Timestamp.fromDate(priorSleepStart)),
-            where('startTime', '<', Timestamp.fromDate(priorSleepEnd)),
-            orderBy('startTime', 'asc')
-        );
-        const priorSleepSnapshot = await getDocs(priorSleepQuery);
-        if (thisVersion !== weeklyViewVersion) return;
-
-        priorSleepSnapshot.forEach(docSnapshot => {
+        priorSleepSnapshot.forEach((docSnapshot: any) => {
             const data = docSnapshot.data();
             allSleepEntries.push({
                 startTime: data.startTime.toDate(),
@@ -1800,25 +1809,7 @@ async function loadWeeklyView(): Promise<void> {
             });
         });
 
-        // Fetch sleep entries from the day after the week
-        const postSleepStart = new Date(weekEnd);
-        postSleepStart.setDate(postSleepStart.getDate() + 1);
-        postSleepStart.setHours(0, 0, 0, 0);
-        const postSleepEnd = new Date(postSleepStart);
-        postSleepEnd.setDate(postSleepEnd.getDate() + 1);
-        postSleepEnd.setHours(0, 0, 0, 0);
-
-        const postSleepQuery = query(
-            collection(db, 'entries'),
-            where('type', '==', 'Sleep'),
-            where('startTime', '>=', Timestamp.fromDate(postSleepStart)),
-            where('startTime', '<', Timestamp.fromDate(postSleepEnd)),
-            orderBy('startTime', 'asc')
-        );
-        const postSleepSnapshot = await getDocs(postSleepQuery);
-        if (thisVersion !== weeklyViewVersion) return;
-
-        postSleepSnapshot.forEach(docSnapshot => {
+        postSleepSnapshot.forEach((docSnapshot: any) => {
             const data = docSnapshot.data();
             allSleepEntries.push({
                 startTime: data.startTime.toDate(),
@@ -1847,7 +1838,7 @@ async function loadWeeklyView(): Promise<void> {
             };
         }
 
-        snapshot.forEach(docSnapshot => {
+        snapshot.forEach((docSnapshot: any) => {
             const data = docSnapshot.data();
             const entryDate = data.startTime.toDate();
             const normalizedDate = toTZDate(entryDate);
