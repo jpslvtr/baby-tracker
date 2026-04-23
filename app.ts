@@ -1488,11 +1488,11 @@ async function loadTimeline(): Promise<void> {
                     summaryHTML += `
                         <div class="stat-group">
                             <div class="stat-group-title">Feeds</div>
-                            <div class="stat-line">Number of feeds: ${totalFeedSessions}</div>
+                            <div class="stat-line">Number of Feeds: ${totalFeedSessions}</div>
                             ${showMilk ? `
                             <div class="stat-line">Breast Milk: ${formatBothUnits(summaryStats.bottles.breastMilk, 'oz')}</div>
                             <div class="stat-line">Formula: ${formatBothUnits(summaryStats.bottles.formula, 'oz')}</div>
-                            <div class="stat-line">Total milk volume: ${formatBothUnits(summaryStats.bottles.total, 'oz')}</div>
+                            <div class="stat-line">Total Milk Volume: ${formatBothUnits(summaryStats.bottles.total, 'oz')}</div>
                             ` : ''}
                             ${showSolids ? `<div class="stat-line">Solid Sessions: ${summaryStats.solids.sessions}</div>` : ''}
                         </div>
@@ -1925,10 +1925,10 @@ async function loadWeeklyView(): Promise<void> {
                 ${vitaminDHTML}
                 <div class="stat-group">
                     <div class="stat-group-title">Feeds</div>
-                    <div class="stat-line">Number of feeds: ${stats.bottles.sessions + stats.solids.sessions}</div>
+                    <div class="stat-line">Number of Feeds: ${stats.bottles.sessions + stats.solids.sessions}</div>
                     <div class="stat-line">Breast Milk: ${formatBothUnits(stats.bottles.breastMilk, 'oz')}</div>
                     <div class="stat-line">Formula: ${formatBothUnits(stats.bottles.formula, 'oz')}</div>
-                    <div class="stat-line">Total milk volume: ${formatBothUnits(stats.bottles.total, 'oz')}</div>
+                    <div class="stat-line">Total Milk Volume: ${formatBothUnits(stats.bottles.total, 'oz')}</div>
                     <div class="stat-line">Solid Sessions: ${stats.solids.sessions}</div>
                 </div>
                 <div class="stat-group">
