@@ -1251,7 +1251,8 @@ async function loadTimeline(): Promise<void> {
         const summaryStats = {
             bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
             diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
-            sleep: { totalMs: 0, sessions: 0 }
+            sleep: { totalMs: 0, sessions: 0 },
+            solids: { sessions: 0 }
         };
 
         if (allTimelineDocs.length === 0) {
@@ -1319,6 +1320,8 @@ async function loadTimeline(): Promise<void> {
                     }
                 } else if (data.type === 'Sleep') {
                     summaryStats.sleep.sessions++;
+                } else if (data.type === 'Solids') {
+                    summaryStats.solids.sessions++;
                 }
 
                 hasVisibleEntries = true;
@@ -1478,14 +1481,20 @@ async function loadTimeline(): Promise<void> {
                 let summaryHTML = '<div class="summary-header">Summary</div><div class="summary-stats">';
                 let hasSummaryContent = false;
 
-                if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula' || typeFilter === 'bottle-all') {
+                if (typeFilter === 'all' || typeFilter === 'bottle-breast-milk' || typeFilter === 'bottle-formula' || typeFilter === 'bottle-all' || typeFilter === 'solids') {
+                    const totalFeedSessions = summaryStats.bottles.sessions + summaryStats.solids.sessions;
+                    const showMilk = typeFilter !== 'solids';
+                    const showSolids = typeFilter === 'all' || typeFilter === 'solids';
                     summaryHTML += `
                         <div class="stat-group">
-                            <div class="stat-group-title">Bottles</div>
-                            <div class="stat-line">Number of feeds: ${summaryStats.bottles.sessions}</div>
+                            <div class="stat-group-title">Feeds</div>
+                            <div class="stat-line">Number of feeds: ${totalFeedSessions}</div>
+                            ${showMilk ? `
                             <div class="stat-line">Breast Milk: ${formatBothUnits(summaryStats.bottles.breastMilk, 'oz')}</div>
                             <div class="stat-line">Formula: ${formatBothUnits(summaryStats.bottles.formula, 'oz')}</div>
-                            <div class="stat-line">Total volume: ${formatBothUnits(summaryStats.bottles.total, 'oz')}</div>
+                            <div class="stat-line">Total milk volume: ${formatBothUnits(summaryStats.bottles.total, 'oz')}</div>
+                            ` : ''}
+                            ${showSolids ? `<div class="stat-line">Solid Sessions: ${summaryStats.solids.sessions}</div>` : ''}
                         </div>
                     `;
                     hasSummaryContent = true;
@@ -1833,6 +1842,7 @@ async function loadWeeklyView(): Promise<void> {
                 vitaminD: date >= vitaminDStartDate ? (vitaminDMap[dateKeyFormatted] === true) : null,
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
+                solids: { sessions: 0 },
                 sleepMs: computeDaySleepMs(allSleepEntries, sleepBounds.start, sleepBounds.end)
             };
         }
@@ -1865,6 +1875,8 @@ async function loadWeeklyView(): Promise<void> {
                     } else if (data.diaperType === 'Mixed') {
                         dayStats[dateKey].diapers.mixed++;
                     }
+                } else if (data.type === 'Solids') {
+                    dayStats[dateKey].solids.sessions++;
                 }
             }
         });
@@ -1912,11 +1924,12 @@ async function loadWeeklyView(): Promise<void> {
                 <div class="day-stats-header">${dayName}<br>${dateStr}</div>
                 ${vitaminDHTML}
                 <div class="stat-group">
-                    <div class="stat-group-title">Bottles</div>
-                    <div class="stat-line">Number of feeds: ${stats.bottles.sessions}</div>
+                    <div class="stat-group-title">Feeds</div>
+                    <div class="stat-line">Number of feeds: ${stats.bottles.sessions + stats.solids.sessions}</div>
                     <div class="stat-line">Breast Milk: ${formatBothUnits(stats.bottles.breastMilk, 'oz')}</div>
                     <div class="stat-line">Formula: ${formatBothUnits(stats.bottles.formula, 'oz')}</div>
-                    <div class="stat-line">Total volume: ${formatBothUnits(stats.bottles.total, 'oz')}</div>
+                    <div class="stat-line">Total milk volume: ${formatBothUnits(stats.bottles.total, 'oz')}</div>
+                    <div class="stat-line">Solid Sessions: ${stats.solids.sessions}</div>
                 </div>
                 <div class="stat-group">
                     <div class="stat-group-title">Diapers</div>
