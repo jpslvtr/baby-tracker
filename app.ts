@@ -40,7 +40,7 @@ interface Entry {
     amount?: number;
     unit?: string;
     diaperType?: string;
-    formulaType?: string;
+    formulaType?: string | null;
     notes: string;
 }
 
@@ -999,7 +999,7 @@ async function handleSubmitEntry(): Promise<void> {
 
             const formulaType = entryType === 'bottle-formula'
                 ? (document.getElementById('bottle-type') as HTMLSelectElement).value
-                : undefined;
+                : null;
 
             entry = {
                 type: 'Feed',
