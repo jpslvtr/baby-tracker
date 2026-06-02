@@ -1,10 +1,33 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit, setDoc, getDoc } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc, getDocs, getDocsFromCache, getDocFromCache, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit, setDoc, getDoc } from 'firebase/firestore';
 import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './config/secrets';
 import { FIREBASECONFIG } from './config/firebase-config'
 
 const firebaseApp = initializeApp(FIREBASECONFIG);
-const db = getFirestore(firebaseApp);
+// Persist reads in IndexedDB so the app can serve them locally (instant) and
+// only revalidate against the server in the background. Multi-tab manager keeps
+// the cache consistent if the app is open in more than one tab.
+const db = initializeFirestore(firebaseApp, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
+// Read source for the Data-tab loaders: 'cache' renders instantly from the
+// local IndexedDB cache, 'server' fetches the authoritative copy.
+type ReadSource = 'cache' | 'server';
+
+// getDocs that honors the read source. A cache miss surfaces as a thrown
+// FirebaseError (handled by callers, which fall back to the server pass).
+function qDocs(q: any, source: ReadSource): Promise<any> {
+    return source === 'cache' ? getDocsFromCache(q) : getDocs(q);
+}
+
+// getDoc that honors the read source. On a cache miss we resolve to a
+// synthetic "does not exist" snapshot so a single missing doc (e.g. a vitamin D
+// day that was never opened) doesn't fail the whole cache pass.
+function qDoc(ref: any, source: ReadSource): Promise<any> {
+    if (source === 'server') return getDoc(ref);
+    return getDocFromCache(ref).catch(() => ({ exists: () => false, data: () => undefined }));
+}
 
 function isAuthenticated(): boolean {
     const authData = localStorage.getItem(AUTH_KEY);
@@ -46,18 +69,55 @@ interface Entry {
 
 let currentWeekStart: Date = getWeekStart(new Date());
 let currentEditingEntryId: string | null = null;
-let lastBottleTimerInterval: number | null = null;
-let lastSolidsTimerInterval: number | null = null;
-let lastPeeTimerInterval: number | null = null;
-let lastPooTimerInterval: number | null = null;
-let lastPumpTimerInterval: number | null = null;
-let timeAwakeTimerInterval: number | null = null;
-let napTimeTimerInterval: number | null = null;
 let vitaminDDateCheckInterval: number | null = null;
 let napTimeMidnightInterval: number | null = null;
 let dataChart: any = null;
 let weeklyViewVersion = 0;
 let timelineVersion = 0;
+let graphVersion = 0;
+let lastGraphSignature = '';
+let isSubmitting = false;
+
+// Single 1s interval that refreshes all the "time since…" displays, replacing
+// seven separate intervals. Paused when the Add-Entry tab isn't visible.
+let displayTimerInterval: number | null = null;
+
+// JSON-export view (Graphs tab) state. The collection is only fetched when the
+// user actually reveals the JSON, not on every tab open.
+let jsonListenersReady = false;
+let jsonCurrentTab: 'feeds' | 'diapers' | 'pumps' | 'sleep' = 'feeds';
+let jsonCurrentString = '[]';
+const jsonData: { feeds: any[]; diapers: any[]; pumps: any[]; sleep: any[] } = {
+    feeds: [], diapers: [], pumps: [], sleep: []
+};
+
+// Chart.js + zoom plugin are loaded lazily on first Graphs-tab use instead of
+// on every page load.
+let chartLibPromise: Promise<void> | null = null;
+
+function loadScript(src: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Failed to load ' + src));
+        document.head.appendChild(s);
+    });
+}
+
+function ensureChartLoaded(): Promise<void> {
+    if (chartLibPromise) return chartLibPromise;
+    // Zoom plugin must load after Chart.js, so await sequentially.
+    chartLibPromise = (async () => {
+        await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js');
+        await loadScript('https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js');
+    })().catch((err) => {
+        chartLibPromise = null;   // allow a retry on the next click
+        throw err;
+    });
+    return chartLibPromise;
+}
 
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
@@ -464,6 +524,13 @@ function switchTab(tab: string): void {
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.view').forEach(view => (view as HTMLElement).style.display = 'none');
 
+    // The per-second displays are only on the entry tab — pause them elsewhere.
+    if (tab === 'entry') {
+        startDisplayTimer();
+    } else {
+        stopDisplayTimer();
+    }
+
     if (tab === 'entry') {
         document.getElementById('entry-tab')?.classList.add('active');
         (document.getElementById('entry-view') as HTMLElement).style.display = 'block';
@@ -476,7 +543,9 @@ function switchTab(tab: string): void {
     } else if (tab === 'weekly') {
         document.getElementById('weekly-tab')?.classList.add('active');
         (document.getElementById('weekly-view') as HTMLElement).style.display = 'block';
+        ensureChartLoaded();   // preload Chart.js so "Update Graph" is instant
         loadJsonData();
+        refreshJsonIfVisible();
     }
 
     window.scrollTo(0, 0);
@@ -964,8 +1033,19 @@ function protectEditBottleNotesFirstLine(): void {
 }
 
 async function handleSubmitEntry(): Promise<void> {
+    // Guard against double submission: if a write is already in flight, ignore
+    // further taps. Without this, a slow network write leaves the button active
+    // and the user taps again, creating a duplicate entry.
+    if (isSubmitting) return;
+
     const entryType = (document.getElementById('entry-type') as HTMLSelectElement).value;
     const statusDiv = document.getElementById('submit-status') as HTMLDivElement;
+    const submitButton = document.getElementById('submit-entry') as HTMLButtonElement;
+
+    isSubmitting = true;
+    submitButton.disabled = true;
+    const originalButtonText = submitButton.textContent;
+    submitButton.textContent = 'Adding...';
 
     try {
         let entry: Entry | null = null;
@@ -1113,15 +1193,18 @@ async function handleSubmitEntry(): Promise<void> {
 
             clearForm();
 
+            // Fire-and-forget: the entry is already written, so don't keep the
+            // button in "Adding..." while these refresh reads round-trip. They
+            // self-contain their errors and the 1s display timers also refresh.
             if (entry.type === 'Feed') {
-                await updateLastBottleTime();
+                updateLastBottleTime();
             } else if (entry.type === 'Solids') {
-                await updateLastSolidsTime();
+                updateLastSolidsTime();
             } else if (entry.type === 'Diaper') {
-                await updateLastDiaperTimes();
+                updateLastDiaperTimes();
             } else if (entry.type === 'Sleep') {
-                await updateLastSleepEndTime();
-                await updateNapTime();
+                updateLastSleepEndTime();
+                updateNapTime();
             }
 
             loadWeeklyView();
@@ -1134,6 +1217,10 @@ async function handleSubmitEntry(): Promise<void> {
         statusDiv.className = 'error';
         statusDiv.textContent = error instanceof Error ? error.message : 'Failed to add entry';
         statusDiv.style.display = 'block';
+    } finally {
+        isSubmitting = false;
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
     }
 }
 
@@ -1190,7 +1277,19 @@ function handleQuickFilter(filterType: string): void {
     loadTimeline();
 }
 
+// Public entry point: paint instantly from the local cache, then refresh from
+// the server in the background. replaceChildren() swaps content atomically so
+// the server pass never blanks the screen.
 async function loadTimeline(): Promise<void> {
+    try {
+        await renderTimeline('cache');
+    } catch {
+        // Cache miss / unavailable — the server pass below handles it.
+    }
+    await renderTimeline('server');
+}
+
+async function renderTimeline(source: ReadSource): Promise<void> {
     const thisVersion = ++timelineVersion;
     const timelineList = document.getElementById('timeline-list') as HTMLDivElement;
     const loadingDiv = document.getElementById('timeline-loading') as HTMLDivElement;
@@ -1198,13 +1297,15 @@ async function loadTimeline(): Promise<void> {
     const endDateInput = (document.getElementById('end-date-filter') as HTMLInputElement).value;
     const typeFilter = (document.getElementById('type-filter') as HTMLSelectElement).value;
 
-    loadingDiv.style.display = 'block';
-    timelineList.innerHTML = '';
-
-    const existingSummary = document.querySelector('.filter-summary');
-    if (existingSummary) {
-        existingSummary.remove();
+    // Only show the loading spinner when there's nothing on screen yet, so the
+    // background server refresh doesn't flash "Loading..." over cached content.
+    if (timelineList.children.length === 0) {
+        loadingDiv.style.display = 'block';
     }
+
+    // Build into a detached fragment and swap it in once, instead of appending
+    // to the live list (which would blank the screen during a refresh).
+    const fragment = document.createDocumentFragment();
 
     try {
         let q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
@@ -1223,8 +1324,12 @@ async function loadTimeline(): Promise<void> {
             );
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await qDocs(q, source);
         if (thisVersion !== timelineVersion) return;
+        // On the cache pass an empty result usually means "not cached yet" rather
+        // than "no entries" — skip rendering and let the server pass decide, so we
+        // don't flash a false "No entries found".
+        if (source === 'cache' && snapshot.empty) return;
 
         // Fetch prior-evening sleep entries (from 7pm the day before start date)
         // so the timeline list shows overnight sleep that belongs to the sleep day
@@ -1244,8 +1349,8 @@ async function loadTimeline(): Promise<void> {
                 orderBy('startTime', 'desc')
             );
             try {
-                const priorEveningSnap = await getDocs(priorEveningQ);
-                priorEveningSnap.forEach(d => {
+                const priorEveningSnap = await qDocs(priorEveningQ, source);
+                priorEveningSnap.forEach((d: any) => {
                     priorEveningSleepDocs.push({ id: d.id, data: d.data() });
                 });
             } catch (e) {
@@ -1258,7 +1363,7 @@ async function loadTimeline(): Promise<void> {
         const allTimelineDocs: { id: string; data: any }[] = [];
         const seenIds = new Set<string>();
 
-        snapshot.forEach(docSnapshot => {
+        snapshot.forEach((docSnapshot: any) => {
             allTimelineDocs.push({ id: docSnapshot.id, data: docSnapshot.data() });
             seenIds.add(docSnapshot.id);
         });
@@ -1279,11 +1384,23 @@ async function loadTimeline(): Promise<void> {
             solids: { sessions: 0 }
         };
 
+        const existingSummary = document.querySelector('.filter-summary');
+
         if (allTimelineDocs.length === 0) {
-            timelineList.innerHTML = '<p>No entries found.</p>';
+            if (existingSummary) existingSummary.remove();
+            const emptyMsg = document.createElement('p');
+            emptyMsg.textContent = 'No entries found.';
+            timelineList.replaceChildren(emptyMsg);
         } else {
             let currentDate = '';
             let hasVisibleEntries = false;
+
+            // Precompute the descending list of poo/mixed timestamps ONCE.
+            // (Previously this list was rebuilt for every poo entry — O(n^2).)
+            const allPooTimes = allTimelineDocs
+                .filter(d => d.data.type === 'Diaper' && (d.data.diaperType === 'Poo' || d.data.diaperType === 'Mixed'))
+                .map(d => d.data.startTime.toDate().getTime())
+                .sort((a, b) => b - a);
 
             allTimelineDocs.forEach(({ id: docId, data }) => {
 
@@ -1357,7 +1474,7 @@ async function loadTimeline(): Promise<void> {
                     const dateHeader = document.createElement('div');
                     dateHeader.className = 'timeline-date-header';
                     dateHeader.textContent = dateKey;
-                    timelineList.appendChild(dateHeader);
+                    fragment.appendChild(dateHeader);
                 }
 
                 const entry = document.createElement('div');
@@ -1408,23 +1525,13 @@ async function loadTimeline(): Promise<void> {
                 let timeSincePooHTML = '';
                 if (data.type === 'Diaper' && (data.diaperType === 'Poo' || data.diaperType === 'Mixed')) {
                     const currentTime = startTime.getTime();
-                    const allPooEntries: { time: number }[] = [];
 
-                    allTimelineDocs.forEach(d => {
-                        const entryData = d.data;
-                        if (entryData.type === 'Diaper' && (entryData.diaperType === 'Poo' || entryData.diaperType === 'Mixed')) {
-                            allPooEntries.push({ time: entryData.startTime.toDate().getTime() });
-                        }
-                    });
-
-                    allPooEntries.sort((a, b) => b.time - a.time);
-
-                    const currentIndex = allPooEntries.findIndex(e => e.time === currentTime);
-                    if (currentIndex >= 0 && currentIndex < allPooEntries.length - 1) {
-                        const previousPooTime = allPooEntries[currentIndex + 1].time;
+                    const currentIndex = allPooTimes.findIndex(t => t === currentTime);
+                    if (currentIndex >= 0 && currentIndex < allPooTimes.length - 1) {
+                        const previousPooTime = allPooTimes[currentIndex + 1];
                         const hoursSince = (currentTime - previousPooTime) / (1000 * 60 * 60);
                         timeSincePooHTML = `<div class="timeline-entry-details" style="color: #666; font-style: italic;">${hoursSince.toFixed(1)} hours since previous poo</div>`;
-                    } else if (currentIndex >= 0 && currentIndex === allPooEntries.length - 1) {
+                    } else if (currentIndex >= 0 && currentIndex === allPooTimes.length - 1) {
                         entry.dataset.needsPriorPoo = 'true';
                         entry.dataset.pooTime = String(currentTime);
                     }
@@ -1450,8 +1557,13 @@ async function loadTimeline(): Promise<void> {
                 editBtn.addEventListener('click', () => openEditModal(docId, data));
                 deleteBtn.addEventListener('click', () => deleteEntry(docId));
 
-                timelineList.appendChild(entry);
+                fragment.appendChild(entry);
             });
+
+            // Swap the freshly built entries in atomically. The old summary (a
+            // sibling of the list, not a child) is left in place until the new
+            // one is ready below, so it doesn't blink during a background refresh.
+            timelineList.replaceChildren(fragment);
 
             // Async: fill in "time since previous poo" for entries where the prior poo was outside the date range
             const needsPriorPooEntries = timelineList.querySelectorAll('[data-needs-prior-poo="true"]');
@@ -1463,11 +1575,12 @@ async function loadTimeline(): Promise<void> {
                             collection(db, 'entries'),
                             where('type', '==', 'Diaper'),
                             where('startTime', '<', Timestamp.fromDate(new Date(pooTime))),
-                            orderBy('startTime', 'desc')
+                            orderBy('startTime', 'desc'),
+                            limit(40)
                         );
-                        const priorPooSnap = await getDocs(priorPooQ);
+                        const priorPooSnap = await qDocs(priorPooQ, source);
                         let previousPooTime: number | null = null;
-                        priorPooSnap.forEach(d => {
+                        priorPooSnap.forEach((d: any) => {
                             if (previousPooTime !== null) return;
                             const dData = d.data();
                             if (dData.diaperType === 'Poo' || dData.diaperType === 'Mixed') {
@@ -1497,6 +1610,7 @@ async function loadTimeline(): Promise<void> {
             }
 
             if (!hasVisibleEntries) {
+                if (existingSummary) existingSummary.remove();
                 timelineList.innerHTML = '<p>No entries match the selected filters.</p>';
             } else {
                 const summaryDiv = document.createElement('div');
@@ -1570,8 +1684,8 @@ async function loadTimeline(): Promise<void> {
                                 where('startTime', '<=', Timestamp.fromDate(priorEnd)),
                                 orderBy('startTime', 'asc')
                             );
-                            const priorSnap = await getDocs(priorQ);
-                            priorSnap.forEach(d => {
+                            const priorSnap = await qDocs(priorQ, source);
+                            priorSnap.forEach((d: any) => {
                                 const sData = d.data();
                                 sleepEntries.push({
                                     startTime: sData.startTime.toDate(),
@@ -1599,8 +1713,8 @@ async function loadTimeline(): Promise<void> {
                                 where('startTime', '<=', Timestamp.fromDate(postEnd)),
                                 orderBy('startTime', 'asc')
                             );
-                            const postSnap = await getDocs(postQ);
-                            postSnap.forEach(d => {
+                            const postSnap = await qDocs(postQ, source);
+                            postSnap.forEach((d: any) => {
                                 const sData = d.data();
                                 sleepEntries.push({
                                     startTime: sData.startTime.toDate(),
@@ -1637,6 +1751,7 @@ async function loadTimeline(): Promise<void> {
                 summaryHTML += '</div>';
 
                 if (thisVersion === timelineVersion && hasSummaryContent) {
+                    if (existingSummary) existingSummary.remove();
                     summaryDiv.innerHTML = summaryHTML;
                     const filterSection = document.querySelector('.filter-section');
                     if (filterSection && filterSection.parentNode) {
@@ -1646,7 +1761,10 @@ async function loadTimeline(): Promise<void> {
             }
         }
     } catch (error) {
-        if (thisVersion === timelineVersion) {
+        // Cache pass failures are silent — the server pass is the fallback.
+        // On a server failure, only show the error if there's nothing already
+        // on screen (don't wipe content we just painted from cache).
+        if (source === 'server' && thisVersion === timelineVersion && timelineList.children.length === 0) {
             timelineList.innerHTML = '<p class="error">Failed to load timeline</p>';
         }
     } finally {
@@ -1692,7 +1810,18 @@ function formatSleepDuration(ms: number): string {
     return `${hours}h ${minutes}m`;
 }
 
+// Public entry point: paint instantly from the local cache, then refresh from
+// the server in the background.
 async function loadWeeklyView(): Promise<void> {
+    try {
+        await renderWeekly('cache');
+    } catch {
+        // Cache miss / unavailable — the server pass below handles it.
+    }
+    await renderWeekly('server');
+}
+
+async function renderWeekly(source: ReadSource): Promise<void> {
     const thisVersion = ++weeklyViewVersion;
     const weeklyStats = document.getElementById('weekly-stats') as HTMLDivElement;
     const loadingDiv = document.getElementById('weekly-loading') as HTMLDivElement;
@@ -1743,8 +1872,11 @@ async function loadWeeklyView(): Promise<void> {
     const weekEnd = getWeekEnd(currentWeekStart);
     weekRange.textContent = `${formatDateOnly(currentWeekStart).split(',')[1].trim()} - ${formatDateOnly(weekEnd).split(',')[1].trim()}`;
 
-    loadingDiv.style.display = 'block';
-    weeklyStats.innerHTML = '';
+    // Only show the loading spinner when nothing is on screen yet, so the
+    // background server refresh doesn't flash over cached content.
+    if (weeklyStats.children.length === 0) {
+        loadingDiv.style.display = 'block';
+    }
 
     try {
         // Build all query parameters before firing any requests
@@ -1776,31 +1908,34 @@ async function loadWeeklyView(): Promise<void> {
 
         // Fire all Firestore requests in parallel — none depend on each other
         const allPromises: Promise<any>[] = [
-            getDocs(query(
+            qDocs(query(
                 collection(db, 'entries'),
                 where('startTime', '>=', Timestamp.fromDate(currentWeekStart)),
                 where('startTime', '<=', Timestamp.fromDate(weekEnd)),
                 orderBy('startTime', 'asc')
-            )),
-            getDocs(query(
+            ), source),
+            qDocs(query(
                 collection(db, 'entries'),
                 where('type', '==', 'Sleep'),
                 where('startTime', '>=', Timestamp.fromDate(priorSleepStart)),
                 where('startTime', '<', Timestamp.fromDate(priorSleepEnd)),
                 orderBy('startTime', 'asc')
-            )),
-            getDocs(query(
+            ), source),
+            qDocs(query(
                 collection(db, 'entries'),
                 where('type', '==', 'Sleep'),
                 where('startTime', '>=', Timestamp.fromDate(postSleepStart)),
                 where('startTime', '<', Timestamp.fromDate(postSleepEnd)),
                 orderBy('startTime', 'asc')
-            )),
-            ...dateKeysToCheck.map(dateKey => getDoc(doc(db, 'vitaminD', dateKey)))
+            ), source),
+            ...dateKeysToCheck.map(dateKey => qDoc(doc(db, 'vitaminD', dateKey), source))
         ];
 
         const allResults = await Promise.all(allPromises);
         if (thisVersion !== weeklyViewVersion) return;
+        // On the cache pass an empty week usually means "not cached yet" — skip
+        // and let the server pass render, so we don't flash all-zero cards.
+        if (source === 'cache' && allResults[0].empty) return;
 
         const snapshot = allResults[0];
         const priorSleepSnapshot = allResults[1];
@@ -1961,7 +2096,7 @@ async function loadWeeklyView(): Promise<void> {
             weeklyContainer.appendChild(dayDiv);
         });
 
-        weeklyStats.appendChild(weeklyContainer);
+        weeklyStats.replaceChildren(weeklyContainer);
 
         if (currentDayIndex !== -1) {
             setTimeout(() => {
@@ -1979,7 +2114,9 @@ async function loadWeeklyView(): Promise<void> {
             }, 100);
         }
     } catch (error) {
-        if (thisVersion === weeklyViewVersion) {
+        // Cache pass failures are silent; on a server failure, only show the
+        // error if there's nothing already painted from cache.
+        if (source === 'server' && thisVersion === weeklyViewVersion && weeklyStats.children.length === 0) {
             weeklyStats.innerHTML = '<p class="error">Failed to load weekly view</p>';
         }
     } finally {
@@ -1989,7 +2126,92 @@ async function loadWeeklyView(): Promise<void> {
     }
 }
 
-async function loadJsonData(): Promise<void> {
+function renderJsonDisplay(): void {
+    const jsonContent = document.getElementById('json-content') as HTMLPreElement;
+    if (!jsonContent) return;
+    jsonCurrentString = JSON.stringify(jsonData[jsonCurrentTab], null, 2);
+    jsonContent.textContent = jsonCurrentString;
+}
+
+// Fetch the full collection and rebuild the per-type JSON arrays. Cache-first
+// (instant) then server. Only called when the JSON view is actually visible.
+async function fetchJsonData(): Promise<void> {
+    const jsonContent = document.getElementById('json-content') as HTMLPreElement;
+    const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
+
+    const buildFrom = (snapshot: any) => {
+        const feeds: any[] = [], diapers: any[] = [], pumps: any[] = [], sleep: any[] = [];
+        snapshot.docs.forEach((docSnapshot: any) => {
+            const data = docSnapshot.data();
+            if (data.type === 'Feed') {
+                feeds.push({
+                    type: data.type, subType: data.subType,
+                    startTime: data.startTime.toDate().toISOString(),
+                    amount: data.amount, unit: data.unit, notes: data.notes || ''
+                });
+            } else if (data.type === 'Solids') {
+                feeds.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    notes: data.notes || ''
+                });
+            } else if (data.type === 'Diaper') {
+                diapers.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    diaperType: data.diaperType, notes: data.notes || ''
+                });
+            } else if (data.type === 'Pump') {
+                pumps.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    amount: data.amount, unit: data.unit, notes: data.notes || ''
+                });
+            } else if (data.type === 'Sleep') {
+                sleep.push({
+                    type: data.type,
+                    startTime: data.startTime.toDate().toISOString(),
+                    endTime: data.endTime ? data.endTime.toDate().toISOString() : null,
+                    notes: data.notes || ''
+                });
+            }
+        });
+        jsonData.feeds = feeds;
+        jsonData.diapers = diapers;
+        jsonData.pumps = pumps;
+        jsonData.sleep = sleep;
+        renderJsonDisplay();
+    };
+
+    let painted = false;
+    try {
+        const cached = await qDocs(q, 'cache');
+        if (!cached.empty) { buildFrom(cached); painted = true; }
+    } catch {
+        // cache miss — fall through to server
+    }
+    try {
+        const fresh = await qDocs(q, 'server');
+        buildFrom(fresh);
+    } catch (error) {
+        if (jsonContent && !painted) jsonContent.textContent = 'Failed to load data';
+    }
+}
+
+// Refresh the JSON only if it's currently revealed (keeps it fresh on tab
+// re-entry without ever fetching while hidden).
+function refreshJsonIfVisible(): void {
+    const jsonContent = document.getElementById('json-content') as HTMLPreElement;
+    if (jsonContent && jsonContent.style.display !== 'none') {
+        fetchJsonData();
+    }
+}
+
+// Wire up the JSON view's buttons exactly once. No data is fetched here — the
+// full-collection read is deferred until the user clicks "Show JSON Data".
+function loadJsonData(): void {
+    if (jsonListenersReady) return;
+
     const jsonContent = document.getElementById('json-content') as HTMLPreElement;
     const toggleButton = document.getElementById('toggle-json') as HTMLButtonElement;
     const copyButton = document.getElementById('copy-json') as HTMLButtonElement;
@@ -2001,158 +2223,47 @@ async function loadJsonData(): Promise<void> {
 
     if (!jsonContent || !toggleButton || !copyButton) return;
 
-    let currentTab: 'feeds' | 'diapers' | 'pumps' | 'sleep' = 'feeds';
-    let feedsData: any[] = [];
-    let diapersData: any[] = [];
-    let pumpsData: any[] = [];
-    let sleepData: any[] = [];
+    jsonListenersReady = true;
 
-    try {
-        const q = query(collection(db, 'entries'), orderBy('startTime', 'desc'));
-        const snapshot = await getDocs(q);
+    toggleButton.addEventListener('click', async () => {
+        const isHidden = jsonContent.style.display === 'none';
+        jsonContent.style.display = isHidden ? 'block' : 'none';
+        copyButton.style.display = isHidden ? 'block' : 'none';
+        if (jsonTabs) jsonTabs.style.display = isHidden ? 'flex' : 'none';
+        toggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
+        if (isHidden) {
+            jsonContent.textContent = 'Loading...';
+            await fetchJsonData();
+        }
+    });
 
-        snapshot.docs.forEach(docSnapshot => {
-            const data = docSnapshot.data();
+    copyButton.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(jsonCurrentString);
+            const originalText = copyButton.textContent;
+            copyButton.textContent = '✓';
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+            }, 2000);
+        } catch (error) {
+            alert('Failed to copy to clipboard');
+        }
+    });
 
-            if (data.type === 'Feed') {
-                feedsData.push({
-                    type: data.type,
-                    subType: data.subType,
-                    startTime: data.startTime.toDate().toISOString(),
-                    amount: data.amount,
-                    unit: data.unit,
-                    notes: data.notes || ''
-                });
-            } else if (data.type === 'Solids') {
-                feedsData.push({
-                    type: data.type,
-                    startTime: data.startTime.toDate().toISOString(),
-                    notes: data.notes || ''
-                });
-            } else if (data.type === 'Diaper') {
-                diapersData.push({
-                    type: data.type,
-                    startTime: data.startTime.toDate().toISOString(),
-                    diaperType: data.diaperType,
-                    notes: data.notes || ''
-                });
-            } else if (data.type === 'Pump') {
-                pumpsData.push({
-                    type: data.type,
-                    startTime: data.startTime.toDate().toISOString(),
-                    amount: data.amount,
-                    unit: data.unit,
-                    notes: data.notes || ''
-                });
-            } else if (data.type === 'Sleep') {
-                sleepData.push({
-                    type: data.type,
-                    startTime: data.startTime.toDate().toISOString(),
-                    endTime: data.endTime ? data.endTime.toDate().toISOString() : null,
-                    notes: data.notes || ''
-                });
-            }
+    const tabs = [
+        { btn: feedsTab, key: 'feeds' as const },
+        { btn: diapersTab, key: 'diapers' as const },
+        { btn: pumpsTab, key: 'pumps' as const },
+        { btn: sleepTab, key: 'sleep' as const }
+    ];
+    tabs.forEach(({ btn, key }) => {
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            jsonCurrentTab = key;
+            tabs.forEach(t => t.btn?.classList.toggle('active', t.key === key));
+            renderJsonDisplay();
         });
-
-        const updateDisplay = () => {
-            let dataToShow;
-            if (currentTab === 'feeds') {
-                dataToShow = feedsData;
-            } else if (currentTab === 'diapers') {
-                dataToShow = diapersData;
-            } else if (currentTab === 'sleep') {
-                dataToShow = sleepData;
-            } else {
-                dataToShow = pumpsData;
-            }
-            const jsonString = JSON.stringify(dataToShow, null, 2);
-            jsonContent.textContent = jsonString;
-            return jsonString;
-        };
-
-        let currentJsonString = updateDisplay();
-
-        const newToggleButton = toggleButton.cloneNode(true) as HTMLButtonElement;
-        const newCopyButton = copyButton.cloneNode(true) as HTMLButtonElement;
-        const newFeedsTab = feedsTab?.cloneNode(true) as HTMLButtonElement;
-        const newDiapersTab = diapersTab?.cloneNode(true) as HTMLButtonElement;
-        const newPumpsTab = pumpsTab?.cloneNode(true) as HTMLButtonElement;
-        const newSleepTab = sleepTab?.cloneNode(true) as HTMLButtonElement;
-
-        toggleButton.parentNode?.replaceChild(newToggleButton, toggleButton);
-        copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
-        if (feedsTab && newFeedsTab) feedsTab.parentNode?.replaceChild(newFeedsTab, feedsTab);
-        if (diapersTab && newDiapersTab) diapersTab.parentNode?.replaceChild(newDiapersTab, diapersTab);
-        if (pumpsTab && newPumpsTab) pumpsTab.parentNode?.replaceChild(newPumpsTab, pumpsTab);
-        if (sleepTab && newSleepTab) sleepTab.parentNode?.replaceChild(newSleepTab, sleepTab);
-
-        newToggleButton.addEventListener('click', () => {
-            const isHidden = jsonContent.style.display === 'none';
-            jsonContent.style.display = isHidden ? 'block' : 'none';
-            newCopyButton.style.display = isHidden ? 'block' : 'none';
-            if (jsonTabs) jsonTabs.style.display = isHidden ? 'flex' : 'none';
-            newToggleButton.textContent = isHidden ? 'Hide JSON Data' : 'Show JSON Data';
-        });
-
-        newCopyButton.addEventListener('click', async () => {
-            try {
-                await navigator.clipboard.writeText(currentJsonString);
-                const originalText = newCopyButton.textContent;
-                newCopyButton.textContent = '✓';
-                setTimeout(() => {
-                    newCopyButton.textContent = originalText;
-                }, 2000);
-            } catch (error) {
-                alert('Failed to copy to clipboard');
-            }
-        });
-
-        if (newFeedsTab) {
-            newFeedsTab.addEventListener('click', () => {
-                currentTab = 'feeds';
-                newFeedsTab.classList.add('active');
-                newDiapersTab.classList.remove('active');
-                newPumpsTab.classList.remove('active');
-                newSleepTab.classList.remove('active');
-                currentJsonString = updateDisplay();
-            });
-        }
-
-        if (newDiapersTab) {
-            newDiapersTab.addEventListener('click', () => {
-                currentTab = 'diapers';
-                newDiapersTab.classList.add('active');
-                newFeedsTab.classList.remove('active');
-                newPumpsTab.classList.remove('active');
-                newSleepTab.classList.remove('active');
-                currentJsonString = updateDisplay();
-            });
-        }
-
-        if (newPumpsTab) {
-            newPumpsTab.addEventListener('click', () => {
-                currentTab = 'pumps';
-                newPumpsTab.classList.add('active');
-                newFeedsTab.classList.remove('active');
-                newDiapersTab.classList.remove('active');
-                newSleepTab.classList.remove('active');
-                currentJsonString = updateDisplay();
-            });
-        }
-
-        if (newSleepTab) {
-            newSleepTab.addEventListener('click', () => {
-                currentTab = 'sleep';
-                newSleepTab.classList.add('active');
-                newFeedsTab.classList.remove('active');
-                newDiapersTab.classList.remove('active');
-                newPumpsTab.classList.remove('active');
-                currentJsonString = updateDisplay();
-            });
-        }
-    } catch (error) {
-        jsonContent.textContent = 'Failed to load data';
-    }
+    });
 }
 
 async function updateGraph(): Promise<void> {
@@ -2164,15 +2275,34 @@ async function updateGraph(): Promise<void> {
         return;
     }
 
+    if (document.querySelectorAll('.graph-checkbox:checked').length === 0) {
+        alert('Please select at least one data series to plot');
+        return;
+    }
+
+    // Make sure Chart.js is loaded (lazy), then paint from cache instantly and
+    // refresh from the server.
+    await ensureChartLoaded();
+    try {
+        await renderGraph('cache');
+    } catch {
+        // cache miss — the server pass handles it
+    }
+    await renderGraph('server');
+}
+
+async function renderGraph(source: ReadSource): Promise<void> {
+    const thisVersion = ++graphVersion;
+
+    const startDateInput = (document.getElementById('graph-start-date') as HTMLInputElement).value;
+    const endDateInput = (document.getElementById('graph-end-date') as HTMLInputElement).value;
+    if (!startDateInput || !endDateInput) return;
+
     const selectedSeries: string[] = [];
     document.querySelectorAll('.graph-checkbox:checked').forEach(checkbox => {
         selectedSeries.push((checkbox as HTMLInputElement).dataset.series!);
     });
-
-    if (selectedSeries.length === 0) {
-        alert('Please select at least one data series to plot');
-        return;
-    }
+    if (selectedSeries.length === 0) return;
 
     const startDate = parseTZDateTime(`${startDateInput}T00:00`);
     const endDate = parseTZDateTime(`${endDateInput}T23:59`);
@@ -2185,7 +2315,11 @@ async function updateGraph(): Promise<void> {
         orderBy('startTime', 'asc')
     );
 
-    const snapshot = await getDocs(q);
+    const snapshot = await qDocs(q, source);
+    if (thisVersion !== graphVersion) return;
+    // On the cache pass, empty usually means "not cached yet" — let the server
+    // pass render rather than drawing an empty chart.
+    if (source === 'cache' && snapshot.empty) return;
 
     // Fetch sleep from day before start date (for first day's sleep day bounds)
     const [gpY, gpM, gpD] = startDateInput.split('-').map(Number);
@@ -2201,7 +2335,8 @@ async function updateGraph(): Promise<void> {
         where('startTime', '<', Timestamp.fromDate(graphPriorEnd)),
         orderBy('startTime', 'asc')
     );
-    const graphPriorSleepSnap = await getDocs(graphPriorSleepQ);
+    const graphPriorSleepSnap = await qDocs(graphPriorSleepQ, source);
+    if (thisVersion !== graphVersion) return;
 
     // Fetch sleep from day after end date (for last day's sleep day bounds)
     const [geY, geM, geD] = endDateInput.split('-').map(Number);
@@ -2219,7 +2354,8 @@ async function updateGraph(): Promise<void> {
         where('startTime', '<', Timestamp.fromDate(graphPostEnd)),
         orderBy('startTime', 'asc')
     );
-    const graphPostSleepSnap = await getDocs(graphPostSleepQ);
+    const graphPostSleepSnap = await qDocs(graphPostSleepQ, source);
+    if (thisVersion !== graphVersion) return;
 
     const dateMap: { [key: string]: { [key: string]: number } } = {};
 
@@ -2246,7 +2382,7 @@ async function updateGraph(): Promise<void> {
     // Collect sleep entries for cross-day calculation
     const allSleepEntries: { startTime: Date; endTime: Date | null }[] = [];
 
-    snapshot.forEach(docRef => {
+    snapshot.forEach((docRef: any) => {
         const data = docRef.data();
         const date = data.startTime.toDate();
         const dateKey = formatDateForInput(toTZDate(date));
@@ -2286,14 +2422,14 @@ async function updateGraph(): Promise<void> {
     });
 
     // Add prior-day and post-day sleep entries for boundary accuracy
-    graphPriorSleepSnap.forEach(d => {
+    graphPriorSleepSnap.forEach((d: any) => {
         const data = d.data();
         allSleepEntries.push({
             startTime: data.startTime.toDate(),
             endTime: data.endTime ? data.endTime.toDate() : null
         });
     });
-    graphPostSleepSnap.forEach(d => {
+    graphPostSleepSnap.forEach((d: any) => {
         const data = d.data();
         allSleepEntries.push({
             startTime: data.startTime.toDate(),
@@ -2349,6 +2485,18 @@ async function updateGraph(): Promise<void> {
             fill: false
         });
     });
+
+    if (thisVersion !== graphVersion) return;
+
+    // Skip the server pass's redraw when the data is identical to what the cache
+    // pass just drew, so we don't restart Chart.js's animation needlessly.
+    const signature = JSON.stringify({ labels, data: datasets.map((d: any) => d.data) });
+    if (source === 'server' && signature === lastGraphSignature) {
+        const container = document.querySelector('.chart-container') as HTMLElement;
+        if (container) container.classList.add('active');
+        return;
+    }
+    lastGraphSignature = signature;
 
     const canvas = document.getElementById('data-chart') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -2768,24 +2916,32 @@ async function deleteEntry(docId: string): Promise<void> {
     }
 }
 
+function updateAllDisplays(): void {
+    updateLastBottleDisplay();
+    updateLastSolidsDisplay();
+    updateLastPeeDisplay();
+    updateLastPooDisplay();
+    updateLastPumpDisplay();
+    updateTimeAwakeDisplay();
+    updateNapTimeDisplay();
+}
+
+function startDisplayTimer(): void {
+    if (displayTimerInterval) clearInterval(displayTimerInterval);
+    updateAllDisplays();
+    displayTimerInterval = window.setInterval(updateAllDisplays, 1000);
+}
+
+function stopDisplayTimer(): void {
+    if (displayTimerInterval) {
+        clearInterval(displayTimerInterval);
+        displayTimerInterval = null;
+    }
+}
+
 async function startAllTimers(): Promise<void> {
     await updateAllEventTimes();
-
-    if (lastBottleTimerInterval) clearInterval(lastBottleTimerInterval);
-    if (lastSolidsTimerInterval) clearInterval(lastSolidsTimerInterval);
-    if (lastPeeTimerInterval) clearInterval(lastPeeTimerInterval);
-    if (lastPooTimerInterval) clearInterval(lastPooTimerInterval);
-    if (lastPumpTimerInterval) clearInterval(lastPumpTimerInterval);
-    if (timeAwakeTimerInterval) clearInterval(timeAwakeTimerInterval);
-    if (napTimeTimerInterval) clearInterval(napTimeTimerInterval);
-
-    lastBottleTimerInterval = window.setInterval(() => updateLastBottleDisplay(), 1000);
-    lastSolidsTimerInterval = window.setInterval(() => updateLastSolidsDisplay(), 1000);
-    lastPeeTimerInterval = window.setInterval(() => updateLastPeeDisplay(), 1000);
-    lastPooTimerInterval = window.setInterval(() => updateLastPooDisplay(), 1000);
-    lastPumpTimerInterval = window.setInterval(() => updateLastPumpDisplay(), 1000);
-    timeAwakeTimerInterval = window.setInterval(() => updateTimeAwakeDisplay(), 1000);
-    napTimeTimerInterval = window.setInterval(() => updateNapTimeDisplay(), 1000);
+    startDisplayTimer();
 }
 
 async function updateAllEventTimes(): Promise<void> {
