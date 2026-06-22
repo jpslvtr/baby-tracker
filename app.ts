@@ -29,6 +29,14 @@ function qDoc(ref: any, source: ReadSource): Promise<any> {
     return getDocFromCache(ref).catch(() => ({ exists: () => false, data: () => undefined }));
 }
 
+// Like qDocs, but on a cache miss it falls back to the server instead of
+// throwing. Used by the post-add refresh path: 'cache' reads the pending write
+// instantly (Firestore latency compensation) while still being correct for
+// out-of-order/backdated entries, and degrades gracefully when the cache is cold.
+function qDocsCacheFirst(q: any, source: ReadSource): Promise<any> {
+    return source === 'cache' ? getDocsFromCache(q).catch(() => getDocs(q)) : getDocs(q);
+}
+
 function isAuthenticated(): boolean {
     const authData = localStorage.getItem(AUTH_KEY);
     if (!authData) return false;
@@ -125,10 +133,21 @@ function getSelectedTimezone(): string {
     return localStorage.getItem('selectedTimezone') || 'America/New_York';
 }
 
+// Memoizes the (expensive) Intl-based conversion below. Keyed by
+// `${timezone}|${utcMs}`. We cache the resulting wall-clock epoch and hand back
+// a FRESH Date on every call, because callers mutate the result (e.g.
+// renderWeekly does `.setHours(0, 0, 0, 0)` on it) — sharing one Date would
+// corrupt the cache.
+const tzDateCache = new Map<string, number>();
+
 // Converts a UTC Date to a plain Date whose .getFullYear()/.getMonth()/.getDate()/.getHours()
 // reflect that UTC moment in the selected timezone.
 function toTZDate(utcDate: Date, tz?: string): Date {
     const timezone = tz || getSelectedTimezone();
+    const key = `${timezone}|${utcDate.getTime()}`;
+    const cached = tzDateCache.get(key);
+    if (cached !== undefined) return new Date(cached);
+
     const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -138,7 +157,12 @@ function toTZDate(utcDate: Date, tz?: string): Date {
     const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
     let h = get('hour');
     if (h === 24) h = 0;
-    return new Date(get('year'), get('month') - 1, get('day'), h, get('minute'), get('second'));
+    const result = new Date(get('year'), get('month') - 1, get('day'), h, get('minute'), get('second'));
+
+    // Bound memory (also clears stale entries after a timezone change).
+    if (tzDateCache.size > 5000) tzDateCache.clear();
+    tzDateCache.set(key, result.getTime());
+    return result;
 }
 
 // Returns a Date with fields reflecting "now" in the selected timezone.
@@ -1153,7 +1177,10 @@ async function handleSubmitEntry(): Promise<void> {
                 orderBy('startTime', 'desc'),
                 limit(1)
             );
-            const ongoingSnapshot = await getDocs(ongoingQ);
+            // Cache-first so a Sleep add isn't blocked on a server round-trip
+            // before the optimistic UI below; fall back to the server only if
+            // the cache has nothing for this query yet.
+            const ongoingSnapshot = await getDocsFromCache(ongoingQ).catch(() => getDocs(ongoingQ));
             if (!ongoingSnapshot.empty) {
                 const latestSleep = ongoingSnapshot.docs[0].data();
                 if (!latestSleep.endTime) {
@@ -1181,10 +1208,23 @@ async function handleSubmitEntry(): Promise<void> {
         }
 
         if (entry) {
-            await addDoc(collection(db, 'entries'), {
-                ...entry,
-                startTime: Timestamp.fromDate(entry.startTime),
-                endTime: entry.endTime ? Timestamp.fromDate(entry.endTime) : null
+            const savedEntry = entry;
+
+            // Optimistic write: persistentLocalCache applies the write to the
+            // local cache synchronously, so we update the UI right away and let
+            // the server round-trip resolve in the background. Awaiting it here
+            // is what made adding feel slow (it blocked on the network).
+            addDoc(collection(db, 'entries'), {
+                ...savedEntry,
+                startTime: Timestamp.fromDate(savedEntry.startTime),
+                endTime: savedEntry.endTime ? Timestamp.fromDate(savedEntry.endTime) : null
+            }).catch(error => {
+                // Offline writes stay queued and do NOT reject, so this only
+                // fires on a genuine failure (e.g. permissions/invalid data).
+                console.error('Error saving entry:', error);
+                statusDiv.className = 'error';
+                statusDiv.textContent = 'Failed to save entry. Please try again.';
+                statusDiv.style.display = 'block';
             });
 
             statusDiv.className = 'success';
@@ -1193,20 +1233,24 @@ async function handleSubmitEntry(): Promise<void> {
 
             clearForm();
 
-            // Fire-and-forget: the entry is already written, so don't keep the
-            // button in "Adding..." while these refresh reads round-trip. They
-            // self-contain their errors and the 1s display timers also refresh.
-            if (entry.type === 'Feed') {
-                updateLastBottleTime();
-            } else if (entry.type === 'Solids') {
-                updateLastSolidsTime();
-            } else if (entry.type === 'Diaper') {
-                updateLastDiaperTimes();
-            } else if (entry.type === 'Sleep') {
-                updateLastSleepEndTime();
-                updateNapTime();
+            // Refresh the "last X" / "next" displays cache-first. The pending
+            // write is already in the local cache, so these resolve instantly
+            // (no server round-trip) while keeping the correct "most recent of
+            // type" logic — important for backdated/out-of-order entries.
+            if (savedEntry.type === 'Feed') {
+                updateLastBottleTime('cache');
+            } else if (savedEntry.type === 'Solids') {
+                updateLastSolidsTime('cache');
+            } else if (savedEntry.type === 'Diaper') {
+                updateLastDiaperTimes('cache');
+            } else if (savedEntry.type === 'Sleep') {
+                updateLastSleepEndTime('cache');
+                updateNapTime('cache');
             }
 
+            // renderWeekly('cache') runs first and the pending write is already
+            // in the local cache, so the new entry renders instantly; the
+            // 'server' pass revalidates in the background.
             loadWeeklyView();
 
             setTimeout(() => {
@@ -2955,7 +2999,7 @@ async function updateAllEventTimes(): Promise<void> {
     ]);
 }
 
-async function updateLastBottleTime(): Promise<void> {
+async function updateLastBottleTime(source: ReadSource = 'server'): Promise<void> {
     try {
         const feedQ = query(
             collection(db, 'entries'),
@@ -2963,7 +3007,7 @@ async function updateLastBottleTime(): Promise<void> {
             orderBy('startTime', 'desc'),
             limit(1)
         );
-        const feedSnap = await getDocs(feedQ);
+        const feedSnap = await qDocsCacheFirst(feedQ, source);
 
         if (!feedSnap.empty) {
             localStorage.setItem('lastBottleTime', feedSnap.docs[0].data().startTime.toDate().toISOString());
@@ -2977,7 +3021,7 @@ async function updateLastBottleTime(): Promise<void> {
     }
 }
 
-async function updateLastSolidsTime(): Promise<void> {
+async function updateLastSolidsTime(source: ReadSource = 'server'): Promise<void> {
     try {
         const solidsQ = query(
             collection(db, 'entries'),
@@ -2985,7 +3029,7 @@ async function updateLastSolidsTime(): Promise<void> {
             orderBy('startTime', 'desc'),
             limit(1)
         );
-        const solidsSnap = await getDocs(solidsQ);
+        const solidsSnap = await qDocsCacheFirst(solidsQ, source);
 
         if (!solidsSnap.empty) {
             localStorage.setItem('lastSolidsTime', solidsSnap.docs[0].data().startTime.toDate().toISOString());
@@ -3007,7 +3051,7 @@ function updateLastSolidsDisplay(): void {
     displayElement.textContent = formatTimeDifference(lastSolidsTimeStr, 'No solids recorded');
 }
 
-async function updateLastDiaperTimes(): Promise<void> {
+async function updateLastDiaperTimes(source: ReadSource = 'server'): Promise<void> {
     try {
         const q = query(
             collection(db, 'entries'),
@@ -3015,12 +3059,12 @@ async function updateLastDiaperTimes(): Promise<void> {
             orderBy('startTime', 'desc'),
             limit(30)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await qDocsCacheFirst(q, source);
 
         let lastPee: Date | undefined = undefined;
         let lastPoo: Date | undefined = undefined;
 
-        snapshot.forEach(docSnapshot => {
+        snapshot.forEach((docSnapshot: any) => {
             const data = docSnapshot.data();
             const time = data.startTime.toDate() as Date;
 
@@ -3097,6 +3141,10 @@ function formatTimeDifference(timeStr: string | null, defaultMessage: string): s
     }
 }
 
+// Signature of the inputs that affect the projected "Next feeds" block, so we
+// only rebuild it when those change (not on every 1s tick).
+let lastBottleFeedsSig = '';
+
 function updateLastBottleDisplay(): void {
     const displayElement = document.getElementById('last-bottle-value') as HTMLElement;
     if (!displayElement) return;
@@ -3104,20 +3152,43 @@ function updateLastBottleDisplay(): void {
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
 
     if (!lastBottleTimeStr) {
-        displayElement.innerHTML = 'No bottles recorded';
+        displayElement.textContent = 'No bottles recorded';
+        lastBottleFeedsSig = '';
         return;
     }
 
-    const timeDiff = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
+    // Build the two-part structure once: a text span for the elapsed time and a
+    // span for the projections. Only the elapsed text changes every second.
+    let timeSpan = displayElement.querySelector('.lb-time') as HTMLElement | null;
+    let feedsSpan = displayElement.querySelector('.lb-feeds') as HTMLElement | null;
+    if (!timeSpan || !feedsSpan) {
+        displayElement.textContent = '';
+        timeSpan = document.createElement('span');
+        timeSpan.className = 'lb-time';
+        feedsSpan = document.createElement('span');
+        feedsSpan.className = 'lb-feeds';
+        feedsSpan.style.fontSize = '12px';
+        feedsSpan.style.color = '#666';
+        displayElement.append(timeSpan, document.createElement('br'), feedsSpan);
+        lastBottleFeedsSig = '';
+    }
+
+    timeSpan.textContent = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
 
     const lastBottleTime = new Date(lastBottleTimeStr);
     const now = new Date();
-    const msSinceLastBottle = now.getTime() - lastBottleTime.getTime();
-    const hoursSinceLastBottle = msSinceLastBottle / (1000 * 60 * 60);
+    const hoursSinceLastBottle = (now.getTime() - lastBottleTime.getTime()) / (1000 * 60 * 60);
+    const overdue = hoursSinceLastBottle > 3;
+
+    // When overdue, projections track the current minute; otherwise they're
+    // anchored to lastBottleTime and never change until that does.
+    const sig = overdue ? `>3|${Math.floor(now.getTime() / 60000)}` : `<=3|${lastBottleTimeStr}`;
+    if (sig === lastBottleFeedsSig) return;
+    lastBottleFeedsSig = sig;
 
     const projectedTimes: string[] = [];
 
-    if (hoursSinceLastBottle > 3) {
+    if (overdue) {
         projectedTimes.push('in the next minute');
 
         for (let i = 1; i <= 2; i++) {
@@ -3146,7 +3217,7 @@ function updateLastBottleDisplay(): void {
         return `+ ${hoursLabel} hours: ${time}`;
     }).join('<br>');
 
-    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">Next feeds:<br>${nextFeedsText}</span>`;
+    feedsSpan.innerHTML = `Next feeds:<br>${nextFeedsText}`;
 }
 
 function updateLastPeeDisplay(): void {
@@ -3165,6 +3236,9 @@ function updateLastPooDisplay(): void {
     displayElement.textContent = formatTimeDifference(lastPooTimeStr, 'No poo recorded');
 }
 
+// Signature of the inputs that affect the projected "Next pumps" block.
+let lastPumpProjSig = '';
+
 function updateLastPumpDisplay(): void {
     const displayElement = document.getElementById('last-pump-value') as HTMLElement;
     if (!displayElement) return;
@@ -3172,20 +3246,39 @@ function updateLastPumpDisplay(): void {
     const lastPumpTimeStr = localStorage.getItem('lastPumpTime');
 
     if (!lastPumpTimeStr) {
-        displayElement.innerHTML = 'No pumps recorded';
+        displayElement.textContent = 'No pumps recorded';
+        lastPumpProjSig = '';
         return;
     }
 
-    const timeDiff = formatTimeDifference(lastPumpTimeStr, 'No pumps recorded');
+    let timeSpan = displayElement.querySelector('.lp-time') as HTMLElement | null;
+    let pumpsSpan = displayElement.querySelector('.lp-pumps') as HTMLElement | null;
+    if (!timeSpan || !pumpsSpan) {
+        displayElement.textContent = '';
+        timeSpan = document.createElement('span');
+        timeSpan.className = 'lp-time';
+        pumpsSpan = document.createElement('span');
+        pumpsSpan.className = 'lp-pumps';
+        pumpsSpan.style.fontSize = '12px';
+        pumpsSpan.style.color = '#666';
+        displayElement.append(timeSpan, document.createElement('br'), pumpsSpan);
+        lastPumpProjSig = '';
+    }
+
+    timeSpan.textContent = formatTimeDifference(lastPumpTimeStr, 'No pumps recorded');
 
     const lastPumpTime = new Date(lastPumpTimeStr);
     const now = new Date();
-    const msSinceLastPump = now.getTime() - lastPumpTime.getTime();
-    const hoursSinceLastPump = msSinceLastPump / (1000 * 60 * 60);
+    const hoursSinceLastPump = (now.getTime() - lastPumpTime.getTime()) / (1000 * 60 * 60);
+    const overdue = hoursSinceLastPump > 4;
+
+    const sig = overdue ? `>4|${Math.floor(now.getTime() / 60000)}` : `<=4|${lastPumpTimeStr}`;
+    if (sig === lastPumpProjSig) return;
+    lastPumpProjSig = sig;
 
     const projectedTimes: string[] = [];
 
-    if (hoursSinceLastPump > 4) {
+    if (overdue) {
         projectedTimes.push('in the next minute');
 
         for (let i = 1; i <= 2; i++) {
@@ -3214,10 +3307,10 @@ function updateLastPumpDisplay(): void {
         return `+ ${hoursLabel} hours: ${time}`;
     }).join('<br>');
 
-    displayElement.innerHTML = `${timeDiff}<br><span style="font-size: 12px; color: #666;">Next pumps:<br>${nextPumpsText}</span>`;
+    pumpsSpan.innerHTML = `Next pumps:<br>${nextPumpsText}`;
 }
 
-async function updateLastSleepEndTime(): Promise<void> {
+async function updateLastSleepEndTime(source: ReadSource = 'server'): Promise<void> {
     try {
         const q = query(
             collection(db, 'entries'),
@@ -3225,7 +3318,7 @@ async function updateLastSleepEndTime(): Promise<void> {
             orderBy('startTime', 'desc'),
             limit(1)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await qDocsCacheFirst(q, source);
 
         if (!snapshot.empty) {
             const data = snapshot.docs[0].data();
@@ -3265,7 +3358,7 @@ function updateTimeAwakeDisplay(): void {
     displayElement.textContent = formatTimeDifference(lastSleepEndStr, 'No sleep recorded');
 }
 
-async function updateNapTime(): Promise<void> {
+async function updateNapTime(source: ReadSource = 'server'): Promise<void> {
     try {
         const nowTZ = nowInTZ();
         const today7amTZ = new Date(nowTZ);
@@ -3278,12 +3371,14 @@ async function updateNapTime(): Promise<void> {
             where('startTime', '>=', Timestamp.fromDate(today7am)),
             orderBy('startTime', 'asc')
         );
-        const snapshot = await getDocs(q);
+        // Cache-first callers (e.g. the optimistic add path) read the pending
+        // write locally; fall back to the server if the cache has nothing yet.
+        const snapshot = await qDocsCacheFirst(q, source);
 
         let completedMs = 0;
         let inProgressStartTime: string | null = null;
 
-        snapshot.forEach(docSnapshot => {
+        snapshot.forEach((docSnapshot: any) => {
             const data = docSnapshot.data();
             const startTime: Date = data.startTime.toDate();
 
