@@ -1,9 +1,0 @@
-{
-    "output": {
-        "filePath": "repomix-output.txt",
-        "style": "plain"
-    },
-    "include": [
-        "**/*"
-    ]
-}
