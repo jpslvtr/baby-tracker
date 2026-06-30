@@ -120,6 +120,11 @@ function ensureChartLoaded(): Promise<void> {
     chartLibPromise = (async () => {
         await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js');
+        const ChartLib = (window as any).Chart;
+        if (ChartLib) {
+            ChartLib.defaults.color = '#cccccc';
+            ChartLib.defaults.borderColor = 'rgba(255, 255, 255, 0.12)';
+        }
     })().catch((err) => {
         chartLibPromise = null;   // allow a retry on the next click
         throw err;
@@ -1531,23 +1536,23 @@ async function renderTimeline(source: ReadSource): Promise<void> {
                 if (data.type === 'Feed') {
                     typeDisplay = `Bottle - ${data.subType}`;
                     detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}</div>`;
-                    backgroundColor = '#d9ebf2';
+                    backgroundColor = '#22323f';
                 } else if (data.type === 'Breast Feed') {
                     typeDisplay = 'Breast Feed';
                     detailsHTML = '';
-                    backgroundColor = '#d9ebf2';
+                    backgroundColor = '#22323f';
                 } else if (data.type === 'Diaper') {
                     detailsHTML = `<div class="timeline-entry-details">Type: ${data.diaperType}</div>`;
-                    backgroundColor = '#fce2d4';
+                    backgroundColor = '#3a2c20';
                 } else if (data.type === 'Pump') {
                     detailsHTML = `<div class="timeline-entry-details">Amount: ${formatBothUnits(data.amount, data.unit)}</div>`;
-                    backgroundColor = '#e2daf2';
+                    backgroundColor = '#2e2740';
                 } else if (data.type === 'Solids') {
                     typeDisplay = 'Solids';
-                    backgroundColor = '#f5e6d0';
+                    backgroundColor = '#38301f';
                 } else if (data.type === 'Sleep') {
                     typeDisplay = 'Sleep';
-                    backgroundColor = '#d4e8d4';
+                    backgroundColor = '#213425';
                     if (data.endTime) {
                         const sleepStart = data.startTime.toDate();
                         const sleepEnd = data.endTime.toDate();
@@ -1574,7 +1579,7 @@ async function renderTimeline(source: ReadSource): Promise<void> {
                     if (currentIndex >= 0 && currentIndex < allPooTimes.length - 1) {
                         const previousPooTime = allPooTimes[currentIndex + 1];
                         const hoursSince = (currentTime - previousPooTime) / (1000 * 60 * 60);
-                        timeSincePooHTML = `<div class="timeline-entry-details" style="color: #666; font-style: italic;">${hoursSince.toFixed(1)} hours since previous poo</div>`;
+                        timeSincePooHTML = `<div class="timeline-entry-details" style="color: #aaa; font-style: italic;">${hoursSince.toFixed(1)} hours since previous poo</div>`;
                     } else if (currentIndex >= 0 && currentIndex === allPooTimes.length - 1) {
                         entry.dataset.needsPriorPoo = 'true';
                         entry.dataset.pooTime = String(currentTime);
@@ -1635,7 +1640,7 @@ async function renderTimeline(source: ReadSource): Promise<void> {
                             const hoursSince = (pooTime - previousPooTime) / (1000 * 60 * 60);
                             const timeSinceDiv = document.createElement('div');
                             timeSinceDiv.className = 'timeline-entry-details';
-                            timeSinceDiv.style.color = '#666';
+                            timeSinceDiv.style.color = '#aaa';
                             timeSinceDiv.style.fontStyle = 'italic';
                             timeSinceDiv.textContent = `${hoursSince.toFixed(1)} hours since previous poo`;
                             const actionsDiv = (pooEntry as HTMLElement).querySelector('.timeline-entry-actions');
@@ -1902,8 +1907,8 @@ async function renderWeekly(source: ReadSource): Promise<void> {
     if (currentWeekBtn) {
         if (normalizedCurrentWeekStart.getTime() === currentWeekStartDate.getTime()) {
             currentWeekBtn.disabled = true;
-            currentWeekBtn.style.backgroundColor = '#999';
-            currentWeekBtn.style.color = '#ccc';
+            currentWeekBtn.style.backgroundColor = '#2a2a2a';
+            currentWeekBtn.style.color = '#666';
             currentWeekBtn.style.cursor = 'default';
         } else {
             currentWeekBtn.disabled = false;
@@ -3168,7 +3173,7 @@ function updateLastBottleDisplay(): void {
         feedsSpan = document.createElement('span');
         feedsSpan.className = 'lb-feeds';
         feedsSpan.style.fontSize = '12px';
-        feedsSpan.style.color = '#666';
+        feedsSpan.style.color = '#aaa';
         displayElement.append(timeSpan, document.createElement('br'), feedsSpan);
         lastBottleFeedsSig = '';
     }
@@ -3260,7 +3265,7 @@ function updateLastPumpDisplay(): void {
         pumpsSpan = document.createElement('span');
         pumpsSpan.className = 'lp-pumps';
         pumpsSpan.style.fontSize = '12px';
-        pumpsSpan.style.color = '#666';
+        pumpsSpan.style.color = '#aaa';
         displayElement.append(timeSpan, document.createElement('br'), pumpsSpan);
         lastPumpProjSig = '';
     }
