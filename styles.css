@@ -1,8 +1,29 @@
+:root {
+    color-scheme: dark;
+    --bg: #1e1e1e;
+    --panel: #2a2a2a;
+    --card: #333333;
+    --fg: #eeeeee;
+    --fg2: #aaaaaa;
+    --fg3: #888888;
+    --label: #cccccc;
+    --border: #3a3a3a;
+    --input-bg: #262626;
+    --input-border: #555555;
+    --btn: #3a3a3a;
+    --btn-hover: #484848;
+    --btn-active: #555555;
+    --accent: #4a90e2;
+    --accent-light: #5a9fd4;
+    --accent-bg: #1c2e3f;
+}
+
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #f0f0f0;
+    background-color: var(--bg);
+    color: var(--fg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     touch-action: manipulation;
@@ -34,16 +55,16 @@ input[type="checkbox"] {
 }
 
 .passcode-box {
-    background-color: white;
+    background-color: var(--panel);
     padding: 40px 30px;
-    border: 2px solid #666;
+    border: 2px solid var(--border);
     max-width: 400px;
     width: 100%;
 }
 
 .passcode-box h1 {
     text-align: center;
-    color: #333;
+    color: var(--fg);
     margin-bottom: 20px;
     font-size: 24px;
 }
@@ -53,7 +74,9 @@ input[type="checkbox"] {
     box-sizing: border-box;
     font-family: monospace;
     font-size: 18px;
-    border: 1px solid #999;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--fg);
     padding: 14px;
     margin-bottom: 15px;
 }
@@ -62,19 +85,20 @@ input[type="checkbox"] {
     width: 100%;
     padding: 14px;
     font-size: 16px;
-    background-color: #ddd;
-    border: 2px outset #ddd;
+    background-color: var(--btn);
+    color: var(--fg);
+    border: 2px outset var(--btn);
     cursor: pointer;
 }
 
 #passcode-submit:active {
-    border: 2px inset #ddd;
+    border: 2px inset var(--btn);
 }
 
 #passcode-error {
-    color: red;
-    background-color: #ffe6e6;
-    border: 1px solid red;
+    color: #ff6b6b;
+    background-color: #4a1f1f;
+    border: 1px solid #c0392b;
     padding: 10px;
     margin-top: 10px;
     border-radius: 4px;
@@ -85,16 +109,16 @@ input[type="checkbox"] {
 .container {
     max-width: 800px;
     margin: 20px auto;
-    background-color: white;
+    background-color: var(--bg);
     padding: 20px;
-    border: 2px solid #666;
+    border: 2px solid var(--border);
     min-height: calc(100vh - 40px);
     box-sizing: border-box;
 }
 
 h1 {
     text-align: center;
-    color: #333;
+    color: var(--fg);
     margin-bottom: 20px;
 }
 
@@ -108,25 +132,26 @@ h1 {
 .tab-button {
     flex: 1;
     min-width: 100px;
-    background-color: #ddd;
-    border: 2px outset #ddd;
+    background-color: var(--btn);
+    color: var(--fg);
+    border: 2px outset var(--btn);
     padding: 10px 16px;
     font-size: 14px;
     cursor: pointer;
 }
 
 .tab-button:hover {
-    background-color: #ccc;
+    background-color: var(--btn-hover);
 }
 
 .tab-button:active {
-    border: 2px inset #ddd;
+    border: 2px inset var(--btn);
 }
 
 .tab-button.active {
-    background-color: #999;
-    color: white;
-    border: 2px inset #999;
+    background-color: var(--btn-active);
+    color: var(--fg);
+    border: 2px inset var(--btn-active);
 }
 
 .view {
@@ -138,14 +163,14 @@ h1 {
 }
 
 .panel {
-    border: 2px solid #999;
+    border: 2px solid var(--border);
     padding: 10px 20px 20px 20px;
-    background-color: #fafafa;
+    background-color: var(--panel);
 }
 
 .last-bottle-display {
-    background-color: #e6f3ff;
-    border: 2px solid #4a90e2;
+    background-color: var(--accent-bg);
+    border: 2px solid var(--accent);
     padding: 15px;
     margin-bottom: 20px;
     border-radius: 4px;
@@ -153,21 +178,21 @@ h1 {
 
 .last-bottle-label {
     font-weight: bold;
-    color: #333;
+    color: var(--fg);
     margin-bottom: 5px;
     font-size: 14px;
 }
 
 .last-bottle-value {
     font-size: 24px;
-    color: #4a90e2;
+    color: var(--accent-light);
     font-weight: bold;
     font-family: monospace;
 }
 
 .vitamin-d-section {
-    background-color: #f5f5f5;
-    border: 1px solid #ccc;
+    background-color: var(--card);
+    border: 1px solid var(--border);
     padding: 12px 15px;
     margin-bottom: 20px;
     border-radius: 4px;
@@ -178,7 +203,7 @@ h1 {
     align-items: center;
     cursor: pointer;
     font-weight: normal;
-    color: #333;
+    color: var(--fg);
     font-size: 15px;
 }
 
@@ -205,7 +230,7 @@ label {
     display: block;
     margin-top: 15px;
     margin-bottom: 5px;
-    color: #444;
+    color: var(--label);
 }
 
 select,
@@ -217,7 +242,9 @@ input[type="date"] {
     box-sizing: border-box;
     font-family: Arial, sans-serif;
     font-size: 16px;
-    border: 1px solid #999;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--fg);
     padding: 10px;
     margin-bottom: 10px;
 }
@@ -227,7 +254,9 @@ textarea {
     box-sizing: border-box;
     font-family: monospace;
     font-size: 14px;
-    border: 1px solid #999;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--fg);
     padding: 10px;
     margin-bottom: 10px;
     resize: vertical;
@@ -235,8 +264,9 @@ textarea {
 }
 
 button {
-    background-color: #ddd;
-    border: 2px outset #ddd;
+    background-color: var(--btn);
+    color: var(--fg);
+    border: 2px outset var(--btn);
     padding: 10px 16px;
     font-size: 14px;
     cursor: pointer;
@@ -245,11 +275,11 @@ button {
 }
 
 button:hover {
-    background-color: #ccc;
+    background-color: var(--btn-hover);
 }
 
 button:active {
-    border: 2px inset #ddd;
+    border: 2px inset var(--btn);
 }
 
 .entry-fields {
@@ -261,28 +291,28 @@ button:active {
 }
 
 .success {
-    color: green;
-    background-color: #e6ffe6;
-    border: 1px solid green;
+    color: #6cc070;
+    background-color: #1a3320;
+    border: 1px solid #2e7d32;
     padding: 10px;
     margin-top: 10px;
     border-radius: 4px;
 }
 
 .error {
-    color: red;
-    background-color: #ffe6e6;
-    border: 1px solid red;
+    color: #ff6b6b;
+    background-color: #4a1f1f;
+    border: 1px solid #c0392b;
     padding: 10px;
     margin-top: 10px;
     border-radius: 4px;
 }
 
 .timeline-entry {
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     padding: 10px;
     margin-bottom: 8px;
-    background-color: white;
+    background-color: var(--card);
 }
 
 .timeline-entry-actions {
@@ -301,11 +331,11 @@ button:active {
 .timeline-date-header {
     font-weight: bold;
     font-size: 16px;
-    color: #333;
+    color: var(--fg);
     padding: 10px 0 8px 0;
     margin-top: 15px;
     margin-bottom: 8px;
-    border-bottom: 2px solid #666;
+    border-bottom: 2px solid var(--input-border);
 }
 
 .timeline-date-header:first-child {
@@ -323,17 +353,17 @@ button:active {
 
 .timeline-entry-type {
     font-weight: bold;
-    color: #333;
+    color: var(--fg);
     font-size: 14px;
 }
 
 .timeline-entry-time {
-    color: #666;
+    color: var(--fg2);
     font-size: 13px;
 }
 
 .timeline-entry-details {
-    color: #444;
+    color: var(--fg2);
     line-height: 1.4;
     font-size: 13px;
 }
@@ -342,7 +372,7 @@ button:active {
     margin-top: 6px;
     padding: 6px;
     background-color: transparent;
-    border-left: 3px solid #999;
+    border-left: 3px solid var(--fg3);
     font-style: italic;
     font-size: 12px;
 }
@@ -382,30 +412,30 @@ button:active {
 }
 
 .day-stats {
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     padding: 15px;
-    background-color: white;
+    background-color: var(--card);
     min-width: 150px;
     flex-shrink: 0;
     scroll-snap-align: start;
 }
 
 .day-stats.current-day {
-    border: 3px solid #4a90e2;
-    background-color: #e6f3ff;
+    border: 3px solid var(--accent);
+    background-color: var(--accent-bg);
 }
 
 .day-stats.current-day .day-stats-header {
-    color: #4a90e2;
+    color: var(--accent-light);
 }
 
 .day-stats-header {
     font-weight: bold;
     font-size: 16px;
-    color: #333;
+    color: var(--fg);
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--border);
     text-align: center;
 }
 
@@ -419,19 +449,19 @@ button:active {
 
 .stat-group-title {
     font-weight: bold;
-    color: #444;
+    color: var(--label);
     margin-bottom: 5px;
     font-size: 14px;
 }
 
 .stat-line {
-    color: #666;
+    color: var(--fg2);
     line-height: 1.6;
     font-size: 13px;
 }
 
 .stat-line-small {
-    color: #666;
+    color: var(--fg2);
     line-height: 1.4;
     font-size: 12px;
 }
@@ -440,8 +470,8 @@ button:active {
     text-align: center;
     margin-top: 30px;
     padding-top: 20px;
-    border-top: 1px solid #ccc;
-    color: #666;
+    border-top: 1px solid var(--border);
+    color: var(--fg3);
     font-size: 12px;
 }
 
@@ -453,23 +483,23 @@ button:active {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.6);
     overflow: auto;
 }
 
 .modal-content {
-    background-color: white;
+    background-color: var(--bg);
     margin: 50px auto;
     padding: 30px;
-    border: 2px solid #666;
+    border: 2px solid var(--border);
     max-width: 500px;
     width: 90%;
 }
 
 .modal-content h2 {
     margin-top: 0;
-    color: #333;
-    border-bottom: 1px solid #ccc;
+    color: var(--fg);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 10px;
     margin-bottom: 20px;
 }
@@ -485,8 +515,8 @@ button:active {
 }
 
 .filter-section {
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
+    background-color: var(--card);
+    border: 1px solid var(--border);
     padding: 15px;
     margin-bottom: 20px;
     border-radius: 4px;
@@ -509,9 +539,9 @@ button:active {
     width: 100%;
     margin-top: 10px;
     margin-bottom: 15px;
-    background-color: #4a90e2;
+    background-color: var(--accent);
     color: white;
-    border: 2px outset #4a90e2;
+    border: 2px outset var(--accent);
 }
 
 .quick-filter-button:hover {
@@ -519,12 +549,12 @@ button:active {
 }
 
 .quick-filter-button:active {
-    border: 2px inset #4a90e2;
+    border: 2px inset var(--accent);
 }
 
 .filter-summary {
-    background-color: #e6f3ff;
-    border: 2px solid #4a90e2;
+    background-color: var(--accent-bg);
+    border: 2px solid var(--accent);
     padding: 15px;
     margin-bottom: 20px;
     border-radius: 4px;
@@ -533,10 +563,10 @@ button:active {
 .summary-header {
     font-weight: bold;
     font-size: 16px;
-    color: #333;
+    color: var(--fg);
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #4a90e2;
+    border-bottom: 1px solid var(--accent);
 }
 
 .summary-stats {
@@ -818,7 +848,7 @@ button:active {
     button,
     select,
     input {
-        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
     }
 
     #bottle-fields div[style*="display: flex"],
@@ -845,8 +875,8 @@ button:active {
 }
 
 .timer-item {
-    background-color: #f5f5f5;
-    border: 1px solid #ccc;
+    background-color: var(--card);
+    border: 1px solid var(--border);
     padding: 10px;
     border-radius: 4px;
 }
@@ -854,13 +884,13 @@ button:active {
 .timer-label {
     font-weight: bold;
     font-size: 12px;
-    color: #666;
+    color: var(--fg2);
     margin-bottom: 4px;
 }
 
 .timer-value {
     font-size: 18px;
-    color: #4a90e2;
+    color: var(--accent-light);
     font-weight: bold;
     font-family: monospace;
 }
@@ -897,9 +927,9 @@ button:active {
     width: auto;
     margin-top: 0;
     margin-bottom: 0;
-    background-color: #4a90e2;
+    background-color: var(--accent);
     color: white;
-    border: 2px outset #4a90e2;
+    border: 2px outset var(--accent);
     padding: 10px 8px;
     font-size: 13px;
 }
@@ -909,7 +939,7 @@ button:active {
 }
 
 .quick-filter-button:active {
-    border: 2px inset #4a90e2;
+    border: 2px inset var(--accent);
 }
 
 @media (max-width: 768px) {
@@ -940,10 +970,11 @@ button:active {
 }
 
 .json-content-box {
-    background-color: #f5f5f5;
+    background-color: var(--card);
+    color: var(--fg);
     padding: 15px;
     padding-bottom: 30px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     overflow-x: auto;
     overflow-y: auto;
     font-size: 11px;
@@ -959,11 +990,11 @@ button:active {
 
 .json-content-box::-webkit-scrollbar-thumb {
     border-radius: 5px;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(255, 255, 255, 0.3);
 }
 
 .json-content-box::-webkit-scrollbar-track {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
     border-radius: 5px;
 }
 
@@ -974,8 +1005,9 @@ button:active {
 
 .json-tab-button {
     flex: 1;
-    background-color: #ddd;
-    border: 2px outset #ddd;
+    background-color: var(--btn);
+    color: var(--fg);
+    border: 2px outset var(--btn);
     padding: 10px 16px;
     font-size: 14px;
     cursor: pointer;
@@ -983,17 +1015,17 @@ button:active {
 }
 
 .json-tab-button:hover {
-    background-color: #ccc;
+    background-color: var(--btn-hover);
 }
 
 .json-tab-button:active {
-    border: 2px inset #ddd;
+    border: 2px inset var(--btn);
 }
 
 .json-tab-button.active {
-    background-color: #999;
-    color: white;
-    border: 2px inset #999;
+    background-color: var(--btn-active);
+    color: var(--fg);
+    border: 2px inset var(--btn-active);
 }
 
 @media (max-width: 768px) {
@@ -1008,20 +1040,20 @@ button:active {
 }
 
 #refresh-button {
-    background-color: #ddd;
-    color: #333;
-    border: 2px outset #ddd;
+    background-color: var(--btn);
+    color: var(--fg);
+    border: 2px outset var(--btn);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 #refresh-button:hover {
-    background-color: #ccc;
+    background-color: var(--btn-hover);
 }
 
 #refresh-button:active {
-    border: 2px inset #ddd;
+    border: 2px inset var(--btn);
 }
 
 @media (max-width: 768px) {
@@ -1104,10 +1136,10 @@ button:active {
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    background-color: white;
+    background-color: var(--card);
     padding: 15px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     min-height: 400px;
     display: none;
 }
@@ -1126,7 +1158,7 @@ button:active {
     .chart-container {
         min-height: 300px;
     }
-    
+
     .chart-container canvas {
         width: 100% !important;
         height: auto !important;
