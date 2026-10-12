@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc, getDocs, getDocsFromCache, getDocFromCache, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit, setDoc, getDoc } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc, getDocs, getDocsFromCache, query, orderBy, where, Timestamp, updateDoc, deleteDoc, doc, limit } from 'firebase/firestore';
 import { PASSCODE, AUTH_KEY, AUTH_DURATION } from './config/secrets';
 import { FIREBASECONFIG } from './config/firebase-config'
 
@@ -19,14 +19,6 @@ type ReadSource = 'cache' | 'server';
 // FirebaseError (handled by callers, which fall back to the server pass).
 function qDocs(q: any, source: ReadSource): Promise<any> {
     return source === 'cache' ? getDocsFromCache(q) : getDocs(q);
-}
-
-// getDoc that honors the read source. On a cache miss we resolve to a
-// synthetic "does not exist" snapshot so a single missing doc (e.g. a vitamin D
-// day that was never opened) doesn't fail the whole cache pass.
-function qDoc(ref: any, source: ReadSource): Promise<any> {
-    if (source === 'server') return getDoc(ref);
-    return getDocFromCache(ref).catch(() => ({ exists: () => false, data: () => undefined }));
 }
 
 // Like qDocs, but on a cache miss it falls back to the server instead of
@@ -77,7 +69,6 @@ interface Entry {
 
 let currentWeekStart: Date = getWeekStart(new Date());
 let currentEditingEntryId: string | null = null;
-let vitaminDDateCheckInterval: number | null = null;
 let napTimeMidnightInterval: number | null = null;
 let dataChart: any = null;
 let weeklyViewVersion = 0;
@@ -263,65 +254,6 @@ function formatDateOnly(utcDate: Date): string {
     return `${days[date.getDay()]}, ${month}/${day}/${year}`;
 }
 
-// Accepts a UTC Date and returns YYYY-MM-DD in the selected timezone.
-function getDateKey(utcDate: Date): string {
-    const date = toTZDate(utcDate);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-async function loadVitaminDStatus(): Promise<void> {
-    const checkbox = document.getElementById('vitamin-d-checkbox') as HTMLInputElement;
-    const statusDiv = document.getElementById('vitamin-d-status') as HTMLDivElement;
-    const labelText = document.getElementById('vitamin-d-label-text') as HTMLSpanElement;
-
-    if (!checkbox || !statusDiv || !labelText) return;
-
-    const today = new Date();
-    const dateKey = getDateKey(today);
-
-    try {
-        const vitaminDDoc = await getDoc(doc(db, 'vitaminD', dateKey));
-
-        if (vitaminDDoc.exists()) {
-            const data = vitaminDDoc.data();
-            checkbox.checked = data.given === true;
-        } else {
-            checkbox.checked = false;
-        }
-
-        labelText.textContent = checkbox.checked ? 'Vitamin D drop given' : 'Record Vitamin D drop';
-        statusDiv.textContent = '';
-        statusDiv.style.display = 'none';
-    } catch (error) {
-        console.error('Error loading vitamin D status:', error);
-        statusDiv.className = 'error';
-        statusDiv.textContent = 'Failed to load vitamin D status';
-        statusDiv.style.display = 'block';
-    }
-}
-
-function scheduleNextMidnightCheck(): void {
-    if (vitaminDDateCheckInterval) {
-        clearTimeout(vitaminDDateCheckInterval);
-    }
-
-    const now = new Date();
-    const nowTZ = nowInTZ();
-    const tomorrowTZ = new Date(nowTZ);
-    tomorrowTZ.setDate(tomorrowTZ.getDate() + 1);
-    tomorrowTZ.setHours(0, 0, 0, 0);
-    const midnightUTC = parseTZDateTime(formatDateTime(tomorrowTZ));
-    const msUntilMidnight = midnightUTC.getTime() - now.getTime();
-
-    vitaminDDateCheckInterval = window.setTimeout(() => {
-        loadVitaminDStatus();
-        scheduleNextMidnightCheck();
-    }, msUntilMidnight);
-}
-
 function scheduleNapTimeReset(): void {
     if (napTimeMidnightInterval) {
         clearTimeout(napTimeMidnightInterval);
@@ -339,36 +271,6 @@ function scheduleNapTimeReset(): void {
         updateNapTime();
         scheduleNapTimeReset();
     }, msUntilMidnight);
-}
-
-async function handleVitaminDChange(event: Event): Promise<void> {
-    const checkbox = event.target as HTMLInputElement;
-    const statusDiv = document.getElementById('vitamin-d-status') as HTMLDivElement;
-    const labelText = document.getElementById('vitamin-d-label-text') as HTMLSpanElement;
-
-    if (!statusDiv || !labelText) return;
-
-    const today = new Date();
-    const dateKey = getDateKey(today);
-
-    try {
-        await setDoc(doc(db, 'vitaminD', dateKey), {
-            given: checkbox.checked,
-            date: Timestamp.fromDate(today)
-        });
-
-        labelText.textContent = checkbox.checked ? 'Vitamin D drop given' : 'Record Vitamin D drop';
-
-        statusDiv.style.display = 'none';
-    } catch (error) {
-        console.error('Error saving vitamin D status:', error);
-        statusDiv.className = 'error';
-        statusDiv.textContent = 'Failed to save vitamin D status';
-        statusDiv.style.display = 'block';
-
-        checkbox.checked = !checkbox.checked;
-        labelText.textContent = checkbox.checked ? 'Vitamin D drop given' : 'Record Vitamin D drop';
-    }
 }
 
 function checkPasscode(): void {
@@ -404,8 +306,6 @@ function initializeUI(): void {
     startAllTimers();
     enforceNumericInputs();
     setupUnitConversion();
-    loadVitaminDStatus();
-    scheduleNextMidnightCheck();
     scheduleNapTimeReset();
     window.scrollTo(0, 0);
 }
@@ -563,7 +463,6 @@ function switchTab(tab: string): void {
     if (tab === 'entry') {
         document.getElementById('entry-tab')?.classList.add('active');
         (document.getElementById('entry-view') as HTMLElement).style.display = 'block';
-        loadVitaminDStatus();
     } else if (tab === 'timeline') {
         document.getElementById('timeline-tab')?.classList.add('active');
         (document.getElementById('timeline-view') as HTMLElement).style.display = 'block';
@@ -601,11 +500,6 @@ function setupEventListeners(): void {
     protectEditBottleNotesFirstLine();
 
     submitButton.addEventListener('click', handleSubmitEntry);
-
-    const vitaminDCheckbox = document.getElementById('vitamin-d-checkbox') as HTMLInputElement;
-    if (vitaminDCheckbox) {
-        vitaminDCheckbox.addEventListener('change', handleVitaminDChange);
-    }
 
     const refreshButton = document.getElementById('refresh-button') as HTMLButtonElement;
     if (refreshButton) {
@@ -689,7 +583,6 @@ function setupEventListeners(): void {
             localStorage.setItem('selectedTimezone', timezoneSelect.value);
             setDefaultTimes();
             setDefaultDateFilters();
-            loadVitaminDStatus();
             updateAllEventTimes();
             loadTimeline();
             loadWeeklyView();
@@ -767,16 +660,19 @@ function handleEntryTypeChange(event: Event): void {
     bottleTypeContainer.style.display = 'none';
     statusDiv.style.display = 'none';
 
-    if (value === 'bottle-breast-milk' || value === 'bottle-formula') {
+    if (value === 'bottle-formula') {
         bottleFields.style.display = 'block';
+        bottleTypeContainer.style.display = 'block';
         submitButton.style.display = 'block';
         const bottleUnit = document.getElementById('bottle-unit') as HTMLSelectElement;
         const bottleAmount = document.getElementById('bottle-amount') as HTMLInputElement;
         bottleAmount.dataset.lastUnit = bottleUnit.value;
 
-        if (value === 'bottle-formula') {
-            bottleTypeContainer.style.display = 'block';
-        }
+        // Dispatching change runs handleBottleTypeChange so the notes get the
+        // same type prefix as when the type is picked by hand.
+        const bottleTypeSelect = document.getElementById('bottle-type') as HTMLSelectElement;
+        bottleTypeSelect.value = 'Bobbie';
+        bottleTypeSelect.dispatchEvent(new Event('change'));
     } else if (value === 'diaper') {
         diaperFields.style.display = 'block';
         submitButton.style.display = 'block';
@@ -1080,7 +976,7 @@ async function handleSubmitEntry(): Promise<void> {
         let entry: Entry | null = null;
         const now = new Date();
 
-        if (entryType === 'bottle-breast-milk' || entryType === 'bottle-formula') {
+        if (entryType === 'bottle-formula') {
             const timeInput = document.getElementById('bottle-time') as HTMLInputElement;
             const time = timeInput.value;
             const amount = parseFloat((document.getElementById('bottle-amount') as HTMLInputElement).value);
@@ -1099,20 +995,14 @@ async function handleSubmitEntry(): Promise<void> {
                 throw new Error('Amount must be greater than 0');
             }
 
-            if (entryType === 'bottle-formula') {
-                const bottleType = (document.getElementById('bottle-type') as HTMLSelectElement).value;
-                if (!bottleType) {
-                    throw new Error('Formula type is required');
-                }
+            const formulaType = (document.getElementById('bottle-type') as HTMLSelectElement).value;
+            if (!formulaType) {
+                throw new Error('Formula type is required');
             }
-
-            const formulaType = entryType === 'bottle-formula'
-                ? (document.getElementById('bottle-type') as HTMLSelectElement).value
-                : null;
 
             entry = {
                 type: 'Feed',
-                subType: entryType === 'bottle-breast-milk' ? 'Breast Milk' : 'Formula',
+                subType: 'Formula',
                 startTime: selectedTime,
                 amount: amount,
                 unit: unit,
@@ -1276,7 +1166,7 @@ async function handleSubmitEntry(): Promise<void> {
 function clearForm(): void {
     (document.getElementById('entry-type') as HTMLSelectElement).value = '';
     (document.getElementById('bottle-amount') as HTMLInputElement).value = '';
-    (document.getElementById('bottle-type') as HTMLSelectElement).value = '';
+    (document.getElementById('bottle-type') as HTMLSelectElement).value = 'Bobbie';
     (document.getElementById('bottle-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('diaper-notes') as HTMLTextAreaElement).value = '';
     (document.getElementById('solids-notes') as HTMLTextAreaElement).value = '';
@@ -1929,19 +1819,6 @@ async function renderWeekly(source: ReadSource): Promise<void> {
 
     try {
         // Build all query parameters before firing any requests
-        const vitaminDStartDate = new Date('2025-11-11');
-        vitaminDStartDate.setHours(0, 0, 0, 0);
-
-        const dateKeysToCheck: string[] = [];
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(currentWeekStart);
-            date.setDate(date.getDate() + i);
-            date.setHours(0, 0, 0, 0);
-            if (date >= vitaminDStartDate) {
-                dateKeysToCheck.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
-            }
-        }
-
         const priorSleepStart = new Date(currentWeekStart);
         priorSleepStart.setDate(priorSleepStart.getDate() - 1);
         priorSleepStart.setHours(0, 0, 0, 0);
@@ -1976,8 +1853,7 @@ async function renderWeekly(source: ReadSource): Promise<void> {
                 where('startTime', '>=', Timestamp.fromDate(postSleepStart)),
                 where('startTime', '<', Timestamp.fromDate(postSleepEnd)),
                 orderBy('startTime', 'asc')
-            ), source),
-            ...dateKeysToCheck.map(dateKey => qDoc(doc(db, 'vitaminD', dateKey), source))
+            ), source)
         ];
 
         const allResults = await Promise.all(allPromises);
@@ -1989,13 +1865,6 @@ async function renderWeekly(source: ReadSource): Promise<void> {
         const snapshot = allResults[0];
         const priorSleepSnapshot = allResults[1];
         const postSleepSnapshot = allResults[2];
-        const vitaminDDocResults = allResults.slice(3);
-
-        const vitaminDMap: { [key: string]: boolean } = {};
-        dateKeysToCheck.forEach((dateKey, index) => {
-            const vitaminDDoc = vitaminDDocResults[index];
-            vitaminDMap[dateKey] = vitaminDDoc.exists() && vitaminDDoc.data()?.given === true;
-        });
 
         // Collect all sleep entries for sleep day calculation
         const allSleepEntries: { startTime: Date; endTime: Date | null }[] = [];
@@ -2032,13 +1901,11 @@ async function renderWeekly(source: ReadSource): Promise<void> {
             date.setDate(date.getDate() + i);
             date.setHours(0, 0, 0, 0);
             const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-            const dateKeyFormatted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
             const sleepBounds = getSleepDayBounds(date);
 
             dayStats[dateKey] = {
                 date: new Date(date),
-                vitaminD: date >= vitaminDStartDate ? (vitaminDMap[dateKeyFormatted] === true) : null,
                 bottles: { total: 0, breastMilk: 0, formula: 0, sessions: 0 },
                 diapers: { total: 0, pee: 0, poo: 0, mixed: 0 },
                 solids: { sessions: 0 },
@@ -2107,21 +1974,8 @@ async function renderWeekly(source: ReadSource): Promise<void> {
             const totalPee = stats.diapers.pee + stats.diapers.mixed;
             const totalPoo = stats.diapers.poo + stats.diapers.mixed;
 
-            let vitaminDHTML = '';
-            if (stats.vitaminD !== null) {
-                const vitaminDStatus = stats.vitaminD ? 'Yes' : 'No';
-                const vitaminDColor = stats.vitaminD ? '#4caf50' : '#f44336';
-                vitaminDHTML = `
-                    <div class="stat-group">
-                        <div class="stat-group-title">Vitamin D</div>
-                        <div class="stat-line" style="color: ${vitaminDColor}; font-weight: bold;">${vitaminDStatus}</div>
-                    </div>
-                `;
-            }
-
             dayDiv.innerHTML = `
                 <div class="day-stats-header">${dayName}<br>${dateStr}</div>
-                ${vitaminDHTML}
                 <div class="stat-group">
                     <div class="stat-group-title">Feeds</div>
                     <div class="stat-line">Number of Feeds: ${stats.bottles.sessions + stats.solids.sessions}</div>
@@ -2683,6 +2537,21 @@ function formatBothUnits(amount: number, unit: string | undefined): string {
     return `${oz.toFixed(1)} oz / ${ml.toFixed(0)} ml`;
 }
 
+// Enfamil is no longer offered, but entries saved with it must stay editable
+// without their type changing. The option is added/removed rather than hidden
+// because iOS Safari ignores hidden/display:none on <option>.
+function setLegacyEnfamilOption(select: HTMLSelectElement, present: boolean): void {
+    const existing = select.querySelector('option[value="Enfamil"]');
+    if (present && !existing) {
+        const option = document.createElement('option');
+        option.value = 'Enfamil';
+        option.textContent = 'Enfamil';
+        select.insertBefore(option, select.querySelector('option[value="Other"]'));
+    } else if (!present && existing) {
+        existing.remove();
+    }
+}
+
 function openEditModal(docId: string, data: any): void {
     currentEditingEntryId = docId;
     const modal = document.getElementById('edit-modal') as HTMLElement;
@@ -2731,6 +2600,7 @@ function openEditModal(docId: string, data: any): void {
                 }
             }
 
+            setLegacyEnfamilOption(editBottleTypeSelect, detectedType === 'Enfamil');
             editBottleTypeSelect.value = detectedType;
             if (detectedType && indicator && typeText) {
                 typeText.textContent = detectedType;
@@ -2740,6 +2610,7 @@ function openEditModal(docId: string, data: any): void {
             }
         } else {
             editBottleTypeContainer.style.display = 'none';
+            setLegacyEnfamilOption(editBottleTypeSelect, false);
             editBottleTypeSelect.value = '';
             if (indicator) {
                 indicator.style.display = 'none';
@@ -3146,83 +3017,12 @@ function formatTimeDifference(timeStr: string | null, defaultMessage: string): s
     }
 }
 
-// Signature of the inputs that affect the projected "Next feeds" block, so we
-// only rebuild it when those change (not on every 1s tick).
-let lastBottleFeedsSig = '';
-
 function updateLastBottleDisplay(): void {
     const displayElement = document.getElementById('last-bottle-value') as HTMLElement;
     if (!displayElement) return;
 
     const lastBottleTimeStr = localStorage.getItem('lastBottleTime');
-
-    if (!lastBottleTimeStr) {
-        displayElement.textContent = 'No bottles recorded';
-        lastBottleFeedsSig = '';
-        return;
-    }
-
-    // Build the two-part structure once: a text span for the elapsed time and a
-    // span for the projections. Only the elapsed text changes every second.
-    let timeSpan = displayElement.querySelector('.lb-time') as HTMLElement | null;
-    let feedsSpan = displayElement.querySelector('.lb-feeds') as HTMLElement | null;
-    if (!timeSpan || !feedsSpan) {
-        displayElement.textContent = '';
-        timeSpan = document.createElement('span');
-        timeSpan.className = 'lb-time';
-        feedsSpan = document.createElement('span');
-        feedsSpan.className = 'lb-feeds';
-        feedsSpan.style.fontSize = '12px';
-        feedsSpan.style.color = '#aaa';
-        displayElement.append(timeSpan, document.createElement('br'), feedsSpan);
-        lastBottleFeedsSig = '';
-    }
-
-    timeSpan.textContent = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
-
-    const lastBottleTime = new Date(lastBottleTimeStr);
-    const now = new Date();
-    const hoursSinceLastBottle = (now.getTime() - lastBottleTime.getTime()) / (1000 * 60 * 60);
-    const overdue = hoursSinceLastBottle > 3;
-
-    // When overdue, projections track the current minute; otherwise they're
-    // anchored to lastBottleTime and never change until that does.
-    const sig = overdue ? `>3|${Math.floor(now.getTime() / 60000)}` : `<=3|${lastBottleTimeStr}`;
-    if (sig === lastBottleFeedsSig) return;
-    lastBottleFeedsSig = sig;
-
-    const projectedTimes: string[] = [];
-
-    if (overdue) {
-        projectedTimes.push('in the next minute');
-
-        for (let i = 1; i <= 2; i++) {
-            const targetTime = new Date(now.getTime() + (i * 3 * 60 * 60 * 1000));
-            const targetTZ = toTZDate(targetTime);
-            const hours = targetTZ.getHours();
-            const minutes = String(targetTZ.getMinutes()).padStart(2, '0');
-            const ampm = hours >= 12 ? 'pm' : 'am';
-            const displayHours = hours % 12 || 12;
-            projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
-        }
-    } else {
-        for (let i = 1; i <= 3; i++) {
-            const targetTime = new Date(lastBottleTime.getTime() + (i * 3 * 60 * 60 * 1000));
-            const targetTZ = toTZDate(targetTime);
-            const hours = targetTZ.getHours();
-            const minutes = String(targetTZ.getMinutes()).padStart(2, '0');
-            const ampm = hours >= 12 ? 'pm' : 'am';
-            const displayHours = hours % 12 || 12;
-            projectedTimes.push(`${displayHours}:${minutes} ${ampm}`);
-        }
-    }
-
-    const nextFeedsText = projectedTimes.map((time, index) => {
-        const hoursLabel = (index + 1) * 3;
-        return `+ ${hoursLabel} hours: ${time}`;
-    }).join('<br>');
-
-    feedsSpan.innerHTML = `Next feeds:<br>${nextFeedsText}`;
+    displayElement.textContent = formatTimeDifference(lastBottleTimeStr, 'No bottles recorded');
 }
 
 function updateLastPeeDisplay(): void {
