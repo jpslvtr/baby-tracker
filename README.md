@@ -12,7 +12,7 @@ Always on:
 
 On by default (you can turn them off):
 - Breast milk bottles
-- Formula bottles, with a brand dropdown. The brand is saved and written as the first line of the notes.
+- Formula bottles, with a brand dropdown. The app saves the brand and writes it as the first line of the notes.
 
 Optional:
 - Sleep, with time awake and daytime sleep totals
@@ -96,7 +96,7 @@ The first time, go to your repository's Settings > Pages and set the source to t
 
 ## Changing settings later
 
-Run setup again. It opens a menu instead of starting over:
+Run setup again. It opens a menu with your current settings:
 
 ```bash
 npm run setup
@@ -119,7 +119,7 @@ You can turn on a feature you skipped during setup, or turn one off, at any time
 
 1. Choose `2` and enter the full list of Google accounts, separated by commas. Press Enter through the other questions to keep them.
 2. Press `s` to save.
-3. Upload the new access rules. No need to republish the site:
+3. Upload the new access rules. You don't need to republish the site:
 
    ```bash
    npm run deploy:firestore
@@ -137,7 +137,7 @@ Bottle, sleep, solids, pumping and Vitamin D features each have three states:
 | archived | hidden | shown, with stats only for periods that have entries |
 | off | hidden | hidden |
 
-Use archived when you stop tracking something but want its history. For example, when you stop pumping. Turning a feature off never deletes entries.
+Use archived when you stop tracking something but want to keep its history, like when you stop pumping. Turning a feature off never deletes entries.
 
 ### Sleep hours
 
@@ -163,7 +163,7 @@ The data lives in your Firestore database:
 
 Your settings live in `tracker.config.json`, `firestore.rules` and `.firebaserc`. All three are gitignored.
 
-The published site is public code, so anyone can read the settings built into it: the Firebase web config (normal for Firebase apps), the birth date, title, footer and feature choices. The list of who can sign in stays out of it. Your entries are only readable by the accounts on that list.
+The published site is public code, so anyone can read the settings built into it: the Firebase web config (normal for Firebase apps), the birth date, title, footer and feature choices. The list of who can sign in stays out of it, and only the accounts on that list can read your entries.
 
 Firebase's free tier covers a family's use.
 
@@ -189,7 +189,7 @@ Your settings are gitignored, so updates never overwrite them.
 
 ## Code
 
-TypeScript and Vite, no framework. `src/main.ts` starts the app, `src/config-schema.ts` defines and checks `tracker.config.json`, and `tools/setup.mjs` is the setup script. `npm run build` type-checks and builds.
+The app uses TypeScript and Vite without a framework. `src/main.ts` starts the app, `src/config-schema.ts` defines and checks `tracker.config.json`, and `tools/setup.mjs` is the setup script. `npm run build` type-checks and builds.
 
 ## License
 
