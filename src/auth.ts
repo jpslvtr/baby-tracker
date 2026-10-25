@@ -30,7 +30,9 @@ async function signIn(): Promise<void> {
             await signInWithRedirect(auth, provider);
         } else if (error?.code !== 'auth/popup-closed-by-user' && error?.code !== 'auth/cancelled-popup-request') {
             console.error('Sign-in failed:', error);
-            showError('Sign-in failed. Please try again.');
+            showError(error?.code === 'auth/unauthorized-domain'
+                ? `Sign-in isn't set up for ${window.location.hostname} yet. In the Firebase console, add it under Authentication > Settings > Authorized domains.`
+                : `Sign-in failed (${error?.code ?? 'unknown error'}). Please try again.`);
         }
     }
 }
