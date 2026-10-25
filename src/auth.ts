@@ -20,6 +20,13 @@ function showError(message: string): void {
     error.style.display = 'block';
 }
 
+function showSignInFailure(error: any): void {
+    console.error('Sign-in failed:', error);
+    showError(error?.code === 'auth/unauthorized-domain'
+        ? `Sign-in isn't set up for ${window.location.hostname} yet. In the Firebase console, add it under Authentication > Settings > Authorized domains.`
+        : `Sign-in failed (${error?.code ?? 'unknown error'}). Please try again.`);
+}
+
 async function signIn(): Promise<void> {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
@@ -27,12 +34,9 @@ async function signIn(): Promise<void> {
         await signInWithPopup(auth, provider);
     } catch (error: any) {
         if (error?.code === 'auth/popup-blocked') {
-            await signInWithRedirect(auth, provider);
+            await signInWithRedirect(auth, provider).catch(showSignInFailure);
         } else if (error?.code !== 'auth/popup-closed-by-user' && error?.code !== 'auth/cancelled-popup-request') {
-            console.error('Sign-in failed:', error);
-            showError(error?.code === 'auth/unauthorized-domain'
-                ? `Sign-in isn't set up for ${window.location.hostname} yet. In the Firebase console, add it under Authentication > Settings > Authorized domains.`
-                : `Sign-in failed (${error?.code ?? 'unknown error'}). Please try again.`);
+            showSignInFailure(error);
         }
     }
 }
