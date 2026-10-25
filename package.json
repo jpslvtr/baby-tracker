@@ -1,0 +1,24 @@
+{
+    "name": "baby-tracker",
+    "version": "1.0.0",
+    "description": "Baby tracker for diapers, bottles, sleep and more, backed by your own Firebase project",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "setup": "node tools/setup.mjs",
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview",
+        "deploy": "npm run build && gh-pages -d dist --nojekyll --no-history -m \"publish site\"",
+        "deploy:firestore": "npx --yes firebase-tools@15 deploy --only firestore"
+    },
+    "dependencies": {
+        "firebase": "^10.7.1"
+    },
+    "devDependencies": {
+        "gh-pages": "^6.3.0",
+        "typescript": "^5.3.3",
+        "vite": "^5.0.8"
+    }
+}

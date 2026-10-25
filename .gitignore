@@ -1,0 +1,20 @@
+node_modules
+dist
+
+# Personal settings, written by npm run setup
+tracker.config.json
+firestore.rules
+.firebaserc
+.firebase/
+firebase-debug.log
+
+deploy.sh
+.DS_Store
+
+# Claude, scratch (wm), and repo-packing artifacts
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+wm*
+repomix*
+repopack*
