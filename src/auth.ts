@@ -1,11 +1,17 @@
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, User } from 'firebase/auth';
-import { auth } from './firebase';
-import { config } from './config';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
+import { getDocFromServer } from 'firebase/firestore';
+import { auth, changeMarkerRef } from './firebase';
 
-// The allowlist here only decides what the screen shows. Firestore rules
-// (firestore.rules) are what actually block anyone else.
-function isAllowed(user: User): boolean {
-    return !!user.email && config.allowedEmails.includes(user.email.toLowerCase());
+// Firestore rules decide who has access (the email list isn't in the site's
+// code), so ask them: this read fails with permission-denied for anyone not
+// on the list. Offline or slow, trust the sign-in and let cached data load.
+async function hasAccess(): Promise<boolean> {
+    const check = getDocFromServer(changeMarkerRef).then(
+        () => true,
+        (error: any) => error?.code !== 'permission-denied'
+    );
+    const timeout = new Promise<boolean>(resolve => setTimeout(() => resolve(true), 4000));
+    return Promise.race([check, timeout]);
 }
 
 function showError(message: string): void {
@@ -55,7 +61,7 @@ export function requireSignIn(onSignedIn: () => void): void {
     document.getElementById('signin-button')?.addEventListener('click', signIn);
 
     onAuthStateChanged(auth, async user => {
-        if (user && isAllowed(user)) {
+        if (user && await hasAccess()) {
             signinScreen.style.display = 'none';
             appScreen.style.display = 'block';
             if (!started) {

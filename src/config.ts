@@ -1,7 +1,7 @@
-import type { FeatureState, TrackerConfig } from './config-schema';
+import type { FeatureState, ClientConfig } from './config-schema';
 
 // Validated by vite.config.ts at build time and inlined here.
-export const config: TrackerConfig = __TRACKER_CONFIG__;
+export const config: ClientConfig = __TRACKER_CONFIG__;
 
 export const features = config.features;
 

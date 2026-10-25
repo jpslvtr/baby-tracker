@@ -12,12 +12,12 @@ function loadTrackerConfig() {
     return parseConfig(JSON.parse(readFileSync(configPath, 'utf8')));
 }
 
-const trackerConfig = loadTrackerConfig();
+const { allowedEmails: _serverOnly, ...clientConfig } = loadTrackerConfig();
 
 export default defineConfig({
-    base: trackerConfig.basePath,
+    base: clientConfig.basePath,
     define: {
-        __TRACKER_CONFIG__: JSON.stringify(trackerConfig)
+        __TRACKER_CONFIG__: JSON.stringify(clientConfig)
     },
     build: {
         outDir: 'dist',

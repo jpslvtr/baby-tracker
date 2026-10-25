@@ -42,6 +42,10 @@ export interface TrackerConfig {
     };
 }
 
+// What gets built into the site. The email list stays out: the published
+// code is public, and firestore.rules is what enforces access.
+export type ClientConfig = Omit<TrackerConfig, 'allowedEmails'>;
+
 class ConfigError extends Error {
     constructor(path: string, problem: string) {
         super(`tracker.config.json: ${path} ${problem}. Run "npm run setup" to fix it.`);
