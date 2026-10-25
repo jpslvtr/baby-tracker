@@ -30,7 +30,7 @@ You need Node.js 20 or newer, a Google account and a GitHub account.
 
 ### 1. Get the code
 
-Create an empty repository on GitHub (for example `baby-tracker`), then:
+Create an empty public repository on GitHub, for example `baby-tracker`. GitHub Pages is free for public repositories, and your data and settings never go into it.
 
 ```bash
 git clone https://github.com/jpslvtr/baby-tracker.git
@@ -64,19 +64,19 @@ In the [Firebase console](https://console.firebase.google.com):
 npm run setup
 ```
 
-It asks for the `firebaseConfig` block, the Google accounts that can sign in, the birth date, your time zone, oz or ml, and your repository name. Then it shows the default features to accept or change, asks whether to show next feed times and how many hours apart, and lists the optional features.
+It asks for the `firebaseConfig` block, the Google accounts that can sign in, the birth date, your time zone, oz or ml, and your repository name. Then it walks through the features: accept or change the defaults, choose whether to show next feed times, and pick any optional features.
 
 ### 4. Upload the access rules
 
 ```bash
-npx firebase-tools login
+npx firebase-tools@15 login
 ```
 
 ```bash
 npm run deploy:firestore
 ```
 
-This uploads rules that let only your listed accounts read or write, plus the indexes the app's queries need. The app can't load data until this is done. On a new project the indexes take a few minutes to build; until then some views show "Failed to load".
+This uploads rules that let only your listed accounts read or write, plus the indexes the app's queries need. The app can't load data until this is done. On a new project the indexes take a few minutes to build.
 
 ### 5. Try it
 
@@ -96,24 +96,36 @@ The first time, go to your repository's Settings > Pages and set the source to t
 
 ## Changing settings later
 
+Run setup again. It opens a menu instead of starting over:
+
+```bash
+npm run setup
+```
+
+### Turn a feature on or off
+
 You can turn on a feature you skipped during setup, or turn one off, at any time. Your entries are kept either way.
 
-1. Run setup again. It opens a menu instead of starting over:
-
-   ```bash
-   npm run setup
-   ```
-
-2. Choose `1` (Features). It lists every feature with its current state and a short description.
-3. Type the feature's number, then `on`, `archived` or `off` (next feed times and the time zone switcher just ask y or n). Features with settings, like sleep hours or the pump interval, ask for them next.
-4. Press Enter to go back, then `s` to save.
-5. Publish, since settings are built into the site:
+1. Choose `1` (Features). It lists every feature with its current state and a short description.
+2. Type the feature's number, then `on`, `archived` or `off` (next feed times and the time zone switcher ask y or n). Features with settings, like sleep hours or the pump interval, ask for them next.
+3. Press Enter to go back, then `s` to save.
+4. Publish, since features are built into the site:
 
    ```bash
    npm run deploy
    ```
 
-The same menu changes who can sign in, the birth date, time zone, units and title. If you changed who can sign in or the Firebase project, also run `npm run deploy:firestore`.
+### Add or remove someone who can sign in
+
+1. Choose `2` and enter the full list of Google accounts, separated by commas. Press Enter through the other questions to keep them.
+2. Press `s` to save.
+3. Upload the new access rules. No need to republish the site:
+
+   ```bash
+   npm run deploy:firestore
+   ```
+
+The same menu changes the birth date, time zone, units, title, footer and Firebase project. Run `npm run deploy` after changing any of them, and `npm run deploy:firestore` too if you switched Firebase projects.
 
 ### Feature states
 
@@ -149,9 +161,31 @@ The data lives in your Firestore database:
 - `vitaminD`: one document per day
 - `meta/lastChange`: updated on every change so other phones know to refresh
 
-Your settings live in `tracker.config.json`, `firestore.rules` and `.firebaserc`. All three are gitignored. The Firebase web config ends up in the published site, which is normal for Firebase apps. The access rules are what keep the data private.
+Your settings live in `tracker.config.json`, `firestore.rules` and `.firebaserc`. All three are gitignored.
+
+The published site is public code, so anyone can read the settings built into it: the Firebase web config (normal for Firebase apps), the birth date, title, footer and feature choices. The list of who can sign in stays out of it. Your entries are only readable by the accounts on that list.
 
 Firebase's free tier covers a family's use.
+
+## Troubleshooting
+
+- **"Sign-in isn't set up for ... yet"**: add the site's domain under Firebase Authentication > Settings > Authorized domains.
+- **"... doesn't have access"**: add the account with setup option `2`, then `npm run deploy:firestore`.
+- **"Failed to load"**: on a new project, wait a few minutes for the indexes to build. Otherwise check that `npm run deploy:firestore` ran for the right project.
+
+## Getting updates
+
+To pull in improvements from the original repository:
+
+```bash
+git pull https://github.com/jpslvtr/baby-tracker.git main
+```
+
+```bash
+npm install && npm run deploy
+```
+
+Your settings are gitignored, so updates never overwrite them.
 
 ## Code
 
