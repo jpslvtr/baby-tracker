@@ -55,7 +55,7 @@ In the [Firebase console](https://console.firebase.google.com):
 1. Add a project. Google Analytics is not used, so you can turn it off.
 2. Build > Firestore Database > Create database. Choose production mode and a location near you.
 3. Build > Authentication > Get started > Sign-in method > Google > Enable.
-4. Authentication > Settings > Authorized domains > Add domain: `YOUR-USERNAME.github.io`.
+4. Authentication > Settings > Authorized domains > Add domain: `YOUR-USERNAME.github.io`. If your GitHub Pages site uses a custom domain (like `yourname.com`), add that domain too, or sign-in will fail on the published site.
 5. Project settings (gear icon) > General > Your apps > Web (`</>`). Register an app and skip Firebase Hosting. Leave this page open: setup asks for the `firebaseConfig` block it shows.
 
 ### 3. Run setup
